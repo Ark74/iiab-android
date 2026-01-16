@@ -1,36 +1,32 @@
-# Internet-in-a-Box on Android
+# :world_map: Internet-in-a-Box on Android
 
-## :world_map: Start here
-
-- **This repo (overview):** you are here, IIAB on Android: termux bootstrap, docs, wrapper & tooling
-- **Android bootstrap:** [`termux-setup/README.md`](./termux-setup/README.md)
-- **proot_services role (at main IIAB repo):** [`roles/proot_services/README.md`](https://github.com/iiab/iiab/blob/master/roles/proot_services/README.md)
-
-## What is "IIAB on Android"
-
-**[Internet-in-a-Box (IIAB)](https://internet-in-a-box.org) on Android** let's run Internet-in-a-Box on Android via Termux + proot-distro. It means that millions of people worldwide can build their own family libraries, inside their own phones.
+**[Internet-in-a-Box (IIAB)](https://internet-in-a-box.org) on Android** will allow millions of people worldwide to build their own family libraries, inside their own phones!
 
 As of January 2026, these IIAB Apps are supported:
 
-* Calibre-Web
-* Kiwix
-* Kolibri
-* Maps
-* Matomo
+* **Calibre-Web** (eBooks & videos)
+* **Kiwix** (Wikipedias, etc)
+* **Kolibri** (lessons & quizzes)
+* **Maps** (satellite photos, terrain, buildings)
+* **Matomo** (metrics)
 
 The default port for the web server is **8085**, for example:
 
 ```
 http://localhost:8085/maps
 ```
-This repo hosts the Android bootstrap (termux-setup), wrapper tooling, and docs, while the proot_services role lives in the main IIAB repo.
 
 ## What are the current components of "IIAB on Android"?
 
-- **termux-setup** (Android-side bootstrap and prerequisites)
-- **IIAB installer wrapper (`1_iiab-on-android`)** (sets up specific `local_vars_android.yml`, requirements  and launches the IIAB installer)
-- **Core IIAB portability layer** (changes across core IIAB and existing roles, e.g. PR #4122)
-- **proot-distro service manager** (PDSM / `proot_services`) to run services without systemd
+- **termux-setup** — sets up a Debian-like environment on Android (it's called [PRoot](https://wiki.termux.com/wiki/PRoot))
+- **Wrapper to install IIAB (`1_iiab-on-android.sh`)** — sets up [`local_vars_android.yml`](https://github.com/iiab/iiab/blob/master/vars/local_vars_android.yml), then launches IIAB's installer
+- **Core IIAB portability layer** — modifications across IIAB and its existing roles, based on [PR #4122](https://github.com/iiab/iiab/pull/4122)
+- **proot-distro service manager (PDSM)** — like systemd, but for `proot_services`
+
+## Related Docs
+
+- **Android bootstrap (in this repo):** [`termux-setup/README.md`](./termux-setup/README.md)
+- **proot_services role (in IIAB's main repo):** [`roles/proot_services/README.md`](https://github.com/iiab/iiab/blob/master/roles/proot_services/README.md)
 
 ---
 
