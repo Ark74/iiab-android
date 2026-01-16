@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # -----------------------------------------------------------------------------
-# GENERATED FILE: 2026-01-15T21:56:15-06:00 - do not edit directly.
+# GENERATED FILE: 2026-01-15T23:48:06-06:00 - do not edit directly.
 # Source modules: termux-setup/*.sh + manifest.sh
 # Rebuild: (cd termux-setup && bash build_bundle.sh)
 # -----------------------------------------------------------------------------
@@ -313,7 +313,7 @@ ensure_proot_distro() {
 proot_install_iiab_safe() {
   local out rc
   set +e
-  if ! proot-distro install --help 2>/dev/null | grep -q -- '--override-alias'; then
+  if ! proot-distro install --help 2>&1 | grep -q -- '--override-alias'; then
     warn_red "proot-distro is too old (missing --override-alias). Please upgrade Termux packages and retry."
     return 1
   fi
