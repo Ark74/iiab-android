@@ -48,7 +48,7 @@ http://localhost:8085/maps
 4. Prepare the Termux environment, disable PPK for Android 12 and 13 (via ADB) by running the following command from the Termux CLI (command-line interface):
 
     ```
-    URL_TERMUX=https://raw.githubusercontent.com/iiab/iiab/refs/heads/master/roles/proot_services/0_termux-setup.sh
+    URL_TERMUX=https://raw.githubusercontent.com/iiab/iiab-android/refs/heads/main/0_termux-setup.sh
     curl -Lo 0_termux-setup_v2.sh $URL_TERMUX
     bash 0_termux-setup.sh --all
     ```
@@ -69,7 +69,7 @@ So far we currently only use it in order to confirm "Disable child processes res
 5. Run the `1_iiab-on-android.sh` script which (a) installs `local_vars_android.yml` to [`/etc/iiab/local_vars.yml`](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?) and (b) runs the IIAB installer:
 
     ```
-    URL_IIAB=https://raw.githubusercontent.com/iiab/iiab/refs/heads/master/roles/proot_services/1_iiab-on-android.sh
+    URL_IIAB=https://raw.githubusercontent.com/iiab/iiab-android/refs/heads/main/1_iiab-on-android.sh
     curl $ URL_IIAB | bash
     ```
 
