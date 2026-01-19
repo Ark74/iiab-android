@@ -36,7 +36,7 @@ setup_logging() {
   mkdir -p "$LOG_DIR"
 
   if [[ -z "${LOG_FILE:-}" ]]; then
-    LOG_FILE="${LOG_DIR}/0_termux-setup.$(date +%Y%m%d-%H%M%S).log"
+    LOG_FILE="${LOG_DIR}/iiab-termux.$(date +%Y%m%d-%H%M%S).log"
   else
     mkdir -p "$(dirname -- "$LOG_FILE")"
   fi

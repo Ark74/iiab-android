@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # build_bundle.sh
-# Bundles modules listed in manifest.sh into ../0_termux-setup.sh
+# Bundles modules listed in manifest.sh into ../iiab-termux
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$SCRIPT_DIR"
@@ -15,8 +15,9 @@ MOD_DIR="$ROOT_DIR"
 
 PARENT_DIR="$(cd -- "${ROOT_DIR}/.." && pwd)"
 OUT_DIR="${ROOT_DIR}/dist"
-OUT_FILE="${PARENT_DIR}/0_termux-setup.sh"
-TMP_FILE="${OUT_DIR}/.0_termux-setup.tmp.$RANDOM$RANDOM"
+OUT_FILE="${PARENT_DIR}/iiab-termux"
+TMP_FILE="${OUT_DIR}/.iiab-termux.tmp.$RANDOM$RANDOM"
+OUT_LEGACY="../"
 
 mkdir -p "$OUT_DIR"
 build_ts="$(date -Is)"
@@ -83,5 +84,6 @@ printf '\n' >>"$TMP_FILE"
 chmod 700 "$TMP_FILE"
 mv -f -- "$TMP_FILE" "$OUT_FILE"
 chmod 700 "$OUT_FILE"
+chmod +x "$OUT_FILE"
 
 echo "[ok] Wrote: $OUT_FILE"

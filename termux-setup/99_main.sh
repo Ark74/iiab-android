@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Module file (no shebang). Bundled by build_bundle.sh
 
-# 0_termux-setup.sh
+# iiab-termux
 # - Termux bootstrap (packages, wakelock)
 # - proot-distro + IIAB Debian bootstrap
 # - ADB wireless pair/connect via Termux:API notifications (no Shizuku)
@@ -33,31 +33,31 @@ CONNECT_PORT_FROM=""   # "", "flag", "positional"
 usage() {
   cat <<'EOF'
 Usage:
-  ./0_termux-setup.sh
+  iiab-termux
     -> Termux baseline + IIAB Debian bootstrap (idempotent). No ADB prompts.
 
-  ./0_termux-setup.sh --login
+  iiab-termux --login
     -> Login into IIAB Debian (proot-distro login iiab).
 
-  ./0_termux-setup.sh --with-adb
+  iiab-termux --with-adb
     -> Termux baseline + IIAB Debian bootstrap + ADB pair/connect if needed (skips if already connected).
 
-  ./0_termux-setup.sh  --adb-only [--connect-port PORT|IP:PORT]
+  iiab-termux  --adb-only [--connect-port PORT|IP:PORT]
     -> Only ADB pair/connect if needed (no IIAB Debian; skips if already connected).
        Tip: --connect-port skips the CONNECT PORT prompt (you’ll still be asked for PAIR PORT + PAIR CODE).
 
-  ./0_termux-setup.sh --connect-only [PORT|IP:PORT]
+  iiab-termux --connect-only [PORT|IP:PORT]
     -> Connect-only (no pairing). Use this after the device was already paired before.
 
-  ./0_termux-setup.sh --ppk-only
+  iiab-termux --ppk-only
     -> Set PPK only: max_phantom_processes=256 (requires ADB already connected).
        Android 14-16 usually achieve this via "Disable child process restrictions" in Developer Options.
 
-  ./0_termux-setup.sh --check
+  iiab-termux --check
     -> Check readiness: developer options flag (if readable),
        (Android 14+) "Disable child process restrictions" proxy flag, and (Android 12-13) PPK effective value.
 
-  ./0_termux-setup.sh --all
+  iiab-termux --all
     -> baseline + IIAB Debian +
        (Android 12-13) ADB pair/connect + apply PPK + run --check
        (Android 14+) optionally skip ADB (reminds to disable child process restrictions).
@@ -174,7 +174,7 @@ final_advice() {
       else
         warn "Android 12-13: PPK value hasn't been verified (max_phantom_processes may be low, e.g. 32)."
         warn "Before starting the IIAB install, run the complete setup so it can apply/check PPK=256; otherwise the installation may fail:"
-        ok   "  ./0_termux-setup.sh --all"
+        ok   "  iiab-termux --all"
         return 0
       fi
     elif [[ "$sdk" =~ ^[0-9]+$ ]] && (( sdk >= 34 )); then
@@ -504,7 +504,7 @@ main() {
   esac
 
   self_check
-  ok "0_termux-setup.sh completed (mode=$MODE)."
+  ok "iiab-termux completed (mode=$MODE)."
   log "---- Mode list ----"
   log "Connect-only             --connect-only [PORT]"
   log "Pair+connect             --adb-only [--connect-port PORT]"

@@ -14,36 +14,36 @@ process into a **ready-to-install IIAB** state.
 For full instructions on how to install IIAB on Android, see the main overview:
 [`iiab-android/README.md`](https://github.com/iiab/iiab-android/blob/main/README.md).
 
-We invite you to continue reading to find out more about the usage, components and development for `0_termux-setup.sh` script.
+We invite you to continue reading to find out more about the usage, components and development for `iiab-termux` script.
 
-## Usage for `0_termux-setup.sh`
+## Usage for `iiab-termux`
 
-Here is a summary of `0_termux-setup.sh` usage:
+Here is a summary of `iiab-termux` usage:
 
 ```
 Usage:
-  ./0_termux-setup.sh
+  iiab-termux
     -> Termux baseline + IIAB Debian bootstrap (idempotent). No ADB prompts.
 
-  ./0_termux-setup.sh --with-adb
+  iiab-termux --with-adb
     -> Termux baseline + IIAB Debian bootstrap + ADB pair/connect if needed (skips if already connected).
 
-  ./0_termux-setup.sh  --adb-only [--connect-port PORT]
+  iiab-termux  --adb-only [--connect-port PORT]
     -> Only ADB pair/connect if needed (no IIAB Debian; skips if already connected).
        Tip: --connect-port skips the CONNECT PORT prompt (you’ll still be asked for PAIR PORT + PAIR CODE).
 
-  ./0_termux-setup.sh --connect-only [CONNECT_PORT]
+  iiab-termux --connect-only [CONNECT_PORT]
     -> Connect-only (no pairing). Use this after the device was already paired before.
 
-  ./0_termux-setup.sh --ppk-only
+  iiab-termux --ppk-only
     -> Set PPK only: max_phantom_processes=256 (requires ADB already connected).
        Android 14-16 usually achieve this via "Disable child process restrictions" in Developer Options.
 
-  ./0_termux-setup.sh --check
+  iiab-termux --check
     -> Check readiness: developer options flag (if readable),
        (Android 14+) "Disable child process restrictions" proxy flag, and (Android 12-13) PPK effective value.
 
-  ./0_termux-setup.sh --all
+  iiab-termux --all
     -> baseline + IIAB Debian + ADB pair/connect if needed + (Android 12-13 only) apply --ppk + run --check.
 
   Optional:
@@ -68,7 +68,7 @@ This project is maintained to simplify development an splited into multiple Bash
 are bundled into a single script:
 
 ```
-0_termux-setup.sh
+iiab-termux
 ```
 
 ### Rules

@@ -59,9 +59,7 @@ http://localhost:8085/maps
 4. Prepare the Termux environment, disable PPK for Android 12 and 13 (via ADB) by running the following command from the Termux CLI (command-line interface):
 
    ```
-   URL_TERMUX=https://raw.githubusercontent.com/iiab/iiab-android/refs/heads/main/0_termux-setup.sh
-   curl -Lo 0_termux-setup.sh $URL_TERMUX
-   bash 0_termux-setup.sh --all
+   curl iiab.io/termux.txt | bash
    ```
 
    * ADB connection and Android 12 & 13
@@ -74,14 +72,13 @@ http://localhost:8085/maps
    * Once complete, enter [PRoot Distro](https://wiki.termux.com/wiki/PRoot)'s IIAB Debian environment to continue the installation:
 
      ```
-     proot-distro login iiab
+     iiab-termux --login iiab
      ```
 
-5. Run the `1_iiab-on-android.sh` script which (a) installs `local_vars_android.yml` to [`/etc/iiab/local_vars.yml`](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?) and (b) runs the IIAB installer:
+5. Run `iiab-android` command which (a) installs `local_vars_android.yml` to [`/etc/iiab/local_vars.yml`](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?) and (b) runs the IIAB installer:
 
    ```
-   URL_IIAB=https://raw.githubusercontent.com/iiab/iiab-android/refs/heads/main/1_iiab-on-android.sh
-   curl $URL_IIAB | bash
+   iiab-android
    ```
 
    If the installer completes successfully, the installation process is finished. And you'll see a text box reading:
@@ -122,7 +119,7 @@ A copy of Wikipedia (in almost any language) can now be put on your Android phon
 3. Open Android's Termux app, and then run:
 
    ```
-   proot-distro login iiab
+   iiab-termux --login iiab
    ```
 
    EXPLANATION: Starting from Termux's high-level CLI (Command-Line Interface), you've "shelled into" [PRoot Distro](https://wiki.termux.com/wiki/PRoot)'s low-level IIAB Debian CLI:
