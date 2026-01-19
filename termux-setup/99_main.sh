@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Module file (no shebang). Bundled by build_bundle.sh
 
-# 0_termux-setup.sh
+# iiab-termux
 # - Termux bootstrap (packages, wakelock)
 # - proot-distro + IIAB Debian bootstrap
 # - ADB wireless pair/connect via Termux:API notifications (no Shizuku)
@@ -26,44 +26,52 @@ CHECK_MON=""
 CHECK_PPK=""
 
 # Modes are mutually exclusive (baseline is default)
-MODE="baseline"      # baseline|with-adb|adb-only|connect-only|ppk-only|check|all
+MODE="baseline"      # baseline|with-adb|adb-only|connect-only|ppk-only|check|all|login
 MODE_SET=0
 CONNECT_PORT_FROM=""   # "", "flag", "positional"
 
 usage() {
   cat <<'EOF'
 Usage:
-  ./0_termux-setup.sh
+  iiab-termux
     -> Termux baseline + IIAB Debian bootstrap (idempotent). No ADB prompts.
 
-  ./0_termux-setup.sh --with-adb
+  iiab-termux --login
+    -> Login into IIAB Debian (proot-distro login iiab).
+
+  iiab-termux --with-adb
     -> Termux baseline + IIAB Debian bootstrap + ADB pair/connect if needed (skips if already connected).
 
-  ./0_termux-setup.sh  --adb-only [--connect-port PORT]
+  iiab-termux  --adb-only [--connect-port PORT|IP:PORT]
     -> Only ADB pair/connect if needed (no IIAB Debian; skips if already connected).
        Tip: --connect-port skips the CONNECT PORT prompt (you’ll still be asked for PAIR PORT + PAIR CODE).
 
-  ./0_termux-setup.sh --connect-only [CONNECT_PORT]
+  iiab-termux --connect-only [PORT|IP:PORT]
     -> Connect-only (no pairing). Use this after the device was already paired before.
 
-  ./0_termux-setup.sh --ppk-only
+  iiab-termux --ppk-only
     -> Set PPK only: max_phantom_processes=256 (requires ADB already connected).
        Android 14-16 usually achieve this via "Disable child process restrictions" in Developer Options.
 
-  ./0_termux-setup.sh --check
+  iiab-termux --iiab-android
+    -> Install/update 'iiab-android' command inside IIAB Debian (does NOT run it).
+
+  iiab-termux --check
     -> Check readiness: developer options flag (if readable),
        (Android 14+) "Disable child process restrictions" proxy flag, and (Android 12-13) PPK effective value.
 
-  ./0_termux-setup.sh --all
-    -> baseline + IIAB Debian + ADB pair/connect if needed + (Android 12-13 only) apply --ppk + run --check.
+  iiab-termux --all
+    -> baseline + IIAB Debian +
+       (Android 12-13) ADB pair/connect + apply PPK + run --check
+       (Android 14+) optionally skip ADB (reminds to disable child process restrictions).
 
   Optional:
-    --connect-port 41313    (5 digits) Skip CONNECT PORT prompt used with --adb-only
-    --timeout 180           Seconds to wait per prompt
-    --reset-iiab            Reset (reinstall) IIAB Debian in proot-distro
-    --no-log                Disable logging
-    --log-file /path/file   Write logs to a specific file
-    --debug                 Extra logs
+    --connect-port [IP:PORT|PORT]  Skip CONNECT PORT prompt (ADB modes)
+    --timeout 180                  Seconds to wait per prompt
+    --reset-iiab                   Reset (reinstall) IIAB Debian in proot-distro
+    --no-log                       Disable logging
+    --log-file /path/file          Write logs to a specific file
+    --debug                        Extra logs
 
 Notes:
 - ADB prompts require: `pkg install termux-api` + Termux:API app installed + notification permission.
@@ -128,6 +136,12 @@ final_advice() {
 
   # 1) Android-related warnings (only meaningful if we attempted checks)
   local sdk="${CHECK_SDK:-${ANDROID_SDK:-}}"
+  local _active=0
+  case "${MODE:-}" in
+    with-adb|adb-only|connect-only|ppk-only|check|all) _active=1 ;;
+    *) _active=0 ;;
+  esac
+
   local adb_connected=0
   local serial="" mon="" mon_fflag=""
 
@@ -140,6 +154,15 @@ final_advice() {
       serial="$(adb_pick_loopback_serial 2>/dev/null || true)"
     fi
   fi
+  # Escalate to red only when user is actively checking/fixing,
+  # OR when we already have ADB connected (strong evidence).
+  advice_warn_bad() {  # args: message
+    if (( _active || adb_connected )); then
+      warn_red "$*"
+    else
+      warn "$*"
+    fi
+  }
 
   # Baseline safety gate:
   # On Android 12-13 (SDK 31-33), IIAB/proot installs can fail if PPK is low (often 32).
@@ -154,7 +177,7 @@ final_advice() {
       else
         warn "Android 12-13: PPK value hasn't been verified (max_phantom_processes may be low, e.g. 32)."
         warn "Before starting the IIAB install, run the complete setup so it can apply/check PPK=256; otherwise the installation may fail:"
-        ok   "  ./0_termux-setup.sh --all"
+        ok   "  iiab-termux --all"
         return 0
       fi
     elif [[ "$sdk" =~ ^[0-9]+$ ]] && (( sdk >= 34 )); then
@@ -178,7 +201,7 @@ final_advice() {
           : # Restrictions already disabled -> ok to continue
         else
           if [[ "${mon:-}" == "true" ]]; then
-            warn "Android 14+: child process restrictions appear ENABLED (monitor=true)."
+            advice_warn_bad "Android 14+: child process restrictions appear ENABLED (monitor=true)."
           else
             warn "Android 14+: child process restrictions haven't been verified (monitor flag unreadable/unknown)."
           fi
@@ -198,13 +221,13 @@ final_advice() {
   else
     # A14+ child restrictions proxy (only if readable)
     if [[ "$sdk" =~ ^[0-9]+$ ]] && (( sdk >= 34 )) && [[ "${CHECK_MON:-}" == "true" ]]; then
-      warn "A14+: disable child process restrictions before installing IIAB."
+      advice_warn_bad "A14+: disable child process restrictions before installing IIAB."
     fi
 
     # Only warn about PPK on A12-13 (A14+ uses child restrictions)
     if [[ "$sdk" =~ ^[0-9]+$ ]] && (( sdk >= 31 && sdk <= 33 )); then
       if [[ "${CHECK_PPK:-}" =~ ^[0-9]+$ ]] && (( CHECK_PPK < 256 )); then
-        warn "PPK is low (${CHECK_PPK}); consider --ppk-only."
+        advice_warn_bad "PPK is low (${CHECK_PPK}); consider --ppk-only."
       fi
     fi
   fi
@@ -225,6 +248,66 @@ final_advice() {
   esac
 }
 
+iiab_login() {
+  local stamp="$STATE_DIR/stamp.termux_base"
+
+  # Baseline stamp is advisory only for login (do not block).
+  if [[ -f "$stamp" ]]; then
+    ok "Baseline stamp found: $stamp"
+  else
+    warn_red "Baseline stamp not found ($stamp)."
+    warn "Tip: run the baseline once: iiab-termux"
+  fi
+
+  have proot-distro || die "proot-distro not found. Install baseline first (pkg install proot-distro or run iiab-termux)."
+  if ! iiab_exists; then
+    warn_red "IIAB Debian is not installed in proot-distro (alias 'iiab' missing)."
+    warn "Recommended: iiab-termux --all"
+    warn "Or:          proot-distro install --override-alias iiab debian"
+    return 1
+  fi
+
+  # Best-effort Android advice before user starts doing heavy installs inside proot.
+  local sdk="${ANDROID_SDK:-}"
+  if [[ "$sdk" =~ ^[0-9]+$ ]] && (( sdk >= 31 && sdk <= 33 )); then
+    # Android 12-13: PPK is a common hard failure point.
+    if have adb; then
+      adb start-server >/dev/null 2>&1 || true
+      if adb_pick_loopback_serial >/dev/null 2>&1; then
+        check_readiness || true
+      else
+        warn_red "Android 12-13: ADB is not connected, so PPK=256 cannot be verified/applied."
+        warn "Before running the IIAB installer inside proot, run:"
+        ok   "  iiab-termux --all"
+      fi
+    else
+      warn_red "Android 12-13: adb is missing, so PPK=256 cannot be verified/applied."
+      warn "Install adb (android-tools) and run:"
+      ok   "  iiab-termux --all"
+    fi
+  elif [[ "$sdk" =~ ^[0-9]+$ ]] && (( sdk >= 34 )); then
+    # Android 14+: rely on 'Disable child process restrictions' (monitor=false).
+    if have adb; then
+      adb start-server >/dev/null 2>&1 || true
+      if adb_pick_loopback_serial >/dev/null 2>&1; then
+        check_readiness || true
+      else
+        warn "Android 14+: ensure 'Disable child process restrictions' is enabled in Developer Options."
+      fi
+    else
+      warn "Android 14+: ensure 'Disable child process restrictions' is enabled in Developer Options."
+    fi
+  fi
+
+  ok "Entering IIAB Debian: proot-distro login iiab"
+
+  # Preserve interactivity even if logging is enabled (avoid pipes/tee issues).
+  if [[ -r /dev/tty ]]; then
+    proot-distro login iiab </dev/tty >&3 2>&4
+  else
+    proot-distro login iiab
+  fi
+}
 # -------------------------
 # Args
 # -------------------------
@@ -241,27 +324,33 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --with-adb) set_mode "with-adb"; shift ;;
     --adb-only) set_mode "adb-only"; shift ;;
+    --login) set_mode "login"; shift ;;
     --connect-only)
       set_mode "connect-only"
       ONLY_CONNECT=1
-      # Optional positional port (5 digits)
-      if [[ "${2:-}" =~ ^[0-9]{5}$ ]]; then
+      # Optional positional connect spec (accept PORT or IP:PORT)
+      if [[ -n "${2:-}" ]]; then
+        local_norm=""
+        if local_norm="$(normalize_port_5digits "${2:-}" 2>/dev/null)"; then
         [[ -n "${CONNECT_PORT_FROM:-}" && "${CONNECT_PORT_FROM}" != "positional" ]] && \
           die "CONNECT PORT specified twice (positional + --connect-port). Use only one."
-        CONNECT_PORT="$2"
+        CONNECT_PORT="$local_norm"
         CONNECT_PORT_FROM="positional"
         shift 2
-      else
-        shift
+          continue
+        fi
       fi
+      shift
       ;;
     --ppk-only) set_mode "ppk-only"; shift ;;
+    --iiab-android) set_mode "iiab-android"; shift ;;
     --check) set_mode "check"; shift ;;
     --all) set_mode "all"; shift ;;
     --connect-port)
       [[ -n "${CONNECT_PORT_FROM:-}" && "${CONNECT_PORT_FROM}" != "flag" ]] && \
         die "CONNECT PORT specified twice (positional + --connect-port). Use only one."
-      CONNECT_PORT="${2:-}"
+      CONNECT_PORT="$(normalize_port_5digits "${2:-}" 2>/dev/null)" || \
+        die "Invalid --connect-port (must be 5 digits PORT or IP:PORT): '${2:-}'"
       CONNECT_PORT_FROM="flag"
       shift 2
       ;;
@@ -276,10 +365,136 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+tty_yesno_default_y() {
+  # args: prompt
+  # Returns 0 for Yes, 1 for No. Default is Yes.
+  local prompt="$1" ans="Y"
+  if [[ -r /dev/tty ]]; then
+    printf "%s" "$prompt" > /dev/tty
+    if ! read -r ans < /dev/tty; then
+      ans="Y"
+    fi
+  else
+    warn "No /dev/tty available; defaulting to YES."
+    ans="Y"
+  fi
+  ans="${ans:-Y}"
+  [[ "$ans" =~ ^[Nn]$ ]] && return 1
+  return 0
+}
+
+tty_yesno_default_n() {
+  # args: prompt
+  # Returns 0 for Yes, 1 for No. Default is No.
+  local prompt="$1" ans="N"
+  if [[ -r /dev/tty ]]; then
+    printf "%s" "$prompt" > /dev/tty
+    read -r ans < /dev/tty || ans="N"
+  else
+    warn "No /dev/tty available; defaulting to NO."
+    ans="N"
+  fi
+  ans="${ans:-N}"
+  [[ "$ans" =~ ^[Yy]$ ]] && return 0
+  return 1
+}
+
+install_iiab_android_cmd() {
+  have proot-distro || die "proot-distro not found"
+  iiab_exists || { warn_red "IIAB Debian (alias 'iiab') not installed."; return 1; }
+
+  local url="${IIAB_ANDROID_URL:-https://raw.githubusercontent.com/iiab/iiab-android/main/iiab-android}"
+  local dest="${IIAB_ANDROID_DEST:-/usr/local/sbin/iiab-android}"
+  local tmp="/tmp/iiab-android.$$"
+
+  local meta old new
+  meta="$(proot-distro login iiab -- env URL="$url" DEST="$dest" TMP="$tmp" bash -lc '
+    set -e
+    old=""
+    if [ -r "$DEST" ]; then old="$(sha256sum "$DEST" 2>/dev/null | cut -d" " -f1 || true)"; fi
+    if ! command -v curl >/dev/null 2>&1; then
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update
+      apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold install ca-certificates curl coreutils
+    fi
+    curl -fsSL --retry 5 --retry-connrefused --retry-delay 2 "$URL" -o "$TMP"
+    head -n1 "$TMP" | grep -q "bash" || { echo "BAD_SHEBANG"; exit 2; }
+    new="$(sha256sum "$TMP" | cut -d" " -f1)"
+    echo "OLD=$old"
+    echo "NEW=$new"
+  ' 2>&1)" || { warn_red "Failed to fetch/install iiab-android in proot."; printf "%s\n" "$meta" | indent >&2; return 1; }"
+
+  if printf '%s\n' "$meta" | grep -q '^BAD_SHEBANG$'; then
+    warn_red "Downloaded iiab-android does not look like a bash script (bad shebang).
+    return 1
+  fi
+  old="$(printf '%s\n' "$meta" | sed -n 's/^OLD=//p' | head -n1)"
+  new="$(printf '%s\n' "$meta" | sed -n 's/^NEW=//p' | head -n1)"
+
+  if [[ -n "$old" && "$old" == "$new" ]]; then
+    ok "iiab-android already up to date inside proot."
+    proot-distro login iiab -- env TMP="$tmp" bash -lc 'rm -f "$TMP" >/dev/null 2>&1 || true' || true
+    return 0
+  fi
+
+  if [[ -n "$old" && "$old" != "$new" ]]; then
+    warn "iiab-android exists and differs inside proot."
+    if ! tty_yesno_default_n "[iiab] Replace existing iiab-android inside proot? [y/N]: "; then
+      warn "Keeping existing iiab-android."
+      proot-distro login iiab -- env TMP="$tmp" bash -lc 'rm -f "$TMP" >/dev/null 2>&1 || true' || true
+     return 0
+    fi
+  fi
+
+  proot-distro login iiab -- env DEST="$dest" TMP="$tmp" bash -lc '
+    set -e
+    mkdir -p "$(dirname "$DEST")"
+    if [ -f "$DEST" ]; then
+      ts="$(date +%Y%m%d-%H%M%S 2>/dev/null || echo now)"
+      mv -f "$DEST" "${DEST}.old.${ts}" 2>/dev/null || true
+    fi
+    install -m 0755 "$TMP" "$DEST"
+    rm -f "$TMP" >/dev/null 2>&1 || true
+  ' || { warn_red "Failed to finalize iiab-android install inside proot."; return 1; }
+
+  ok "Installed inside proot: $dest"
+  ok "Next (inside proot): iiab-android"
+}
+
+all_a14plus_optional_adb() {
+  # Android 14+: ADB is optional. If already connected, run checks (no prompts).
+  local serial=""
+
+  if have adb; then
+    adb start-server >/dev/null 2>&1 || true
+    if serial="$(adb_pick_loopback_serial 2>/dev/null)"; then
+      ok "ADB already connected: $serial (running checks, no prompts)."
+      check_readiness || true
+      return 0
+    fi
+  fi
+
+  # Not connected -> ask whether to skip ADB flows
+  if tty_yesno_default_y "[iiab] Android 14+: Skip ADB pairing/connect steps? [Y/n]: "; then
+    warn "Skipping ADB steps (Android 14+)."
+    warn "Reminder: enable Developer Options -> 'Disable child process restrictions' (otherwise installs may fail)."
+    CHECK_NO_ADB=1
+    CHECK_SDK="${ANDROID_SDK:-}"
+    return 0
+  fi
+
+  # User wants ADB even on A14+: proceed
+  adb_pair_connect_if_needed
+  check_readiness || true
+  return 0
+}
+
 validate_args() {
   if [[ -n "${CONNECT_PORT:-}" ]]; then
-    CONNECT_PORT="${CONNECT_PORT//[[:space:]]/}"
-    [[ "$CONNECT_PORT" =~ ^[0-9]{5}$ ]] || die "Invalid --connect-port (must be 5 digits): '$CONNECT_PORT'"
+    local raw="$CONNECT_PORT" norm=""
+    norm="$(normalize_port_5digits "$raw" 2>/dev/null)" || \
+      die "Invalid --connect-port (must be 5 digits PORT or IP:PORT): '$raw'"
+    CONNECT_PORT="$norm"
     case "$MODE" in
       adb-only|with-adb|connect-only|ppk-only|check|all) : ;;
       baseline)
@@ -314,16 +529,22 @@ main() {
   acquire_wakelock
 
   case "$MODE" in
+    login)
+      iiab_login
+      return $?
+      ;;
     baseline)
       step_termux_repo_select_once
       step_termux_base || baseline_bail
       step_iiab_bootstrap_default
+      install_iiab_android_cmd || true
       ;;
 
     with-adb)
       step_termux_repo_select_once
       step_termux_base || baseline_bail
       step_iiab_bootstrap_default
+      install_iiab_android_cmd || true
       adb_pair_connect_if_needed
       ;;
 
@@ -343,6 +564,13 @@ main() {
       ppk_fix_via_adb || true
       ;;
 
+    iiab-android)
+      step_termux_repo_select_once
+      step_termux_base || baseline_bail
+      step_iiab_bootstrap_default
+      install_iiab_android_cmd || true
+      ;;
+
     check)
       step_termux_base || baseline_bail
       check_readiness || true
@@ -352,9 +580,14 @@ main() {
       step_termux_repo_select_once
       step_termux_base || baseline_bail
       step_iiab_bootstrap_default
-      adb_pair_connect_if_needed
-      attempt_auto_apply_ppk
-      check_readiness || true
+      install_iiab_android_cmd || true
+      if [[ "${ANDROID_SDK:-}" =~ ^[0-9]+$ ]] && (( ANDROID_SDK >= 34 )); then
+        all_a14plus_optional_adb
+      else
+        adb_pair_connect
+        attempt_auto_apply_ppk
+        check_readiness || true
+      fi
       ;;
 
     *)
@@ -363,10 +596,11 @@ main() {
   esac
 
   self_check
-  ok "0_termux-setup.sh completed (mode=$MODE)."
+  ok "iiab-termux completed (mode=$MODE)."
   log "---- Mode list ----"
   log "Connect-only             --connect-only [PORT]"
   log "Pair+connect             --adb-only [--connect-port PORT]"
+  log "Login (proot)            --login"
   log "Check                    --check"
   log "Apply PPK                --ppk-only"
   log "Base+IIAB Debian+Pair+connect --with-adb"

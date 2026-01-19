@@ -117,14 +117,26 @@ normalize_port_5digits() {
 }
 
 ask_port_5digits() {
-  # args: key title
-  local key="$1" title="$2" v="" p=""
+  # args: key title prompt_text
+  local key="$1" title="$2" prompt_text="${3:-"(5 digits PORT)"}" v="" p=""
   while true; do
-    v="$(notify_ask_one "$key" "$title" "(5 digits PORT or IP:PORT)")" || return 1
+    v="$(notify_ask_one "$key" "$title" "$prompt_text")" || return 1
     p="$(normalize_port_5digits "$v")" || continue
     echo "$p"
     return 0
   done
+}
+
+ask_connect_port_5digits() {
+  # args: key title
+  ask_port_5digits "$1" "$2" "(5 digits PORT or IP:PORT)"
+}
+
+ask_pair_port_5digits() {
+  # args: key title
+  # NOTE: We still tolerate pasted "IP:PORT" via normalize_port_5digits(),
+  # but we do NOT advertise it here to reduce confusion/stress.
+  ask_port_5digits "$1" "$2" "(5 digits PORT)"
 }
 
 ask_code_6digits() {

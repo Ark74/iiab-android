@@ -107,11 +107,13 @@ adb_pair_connect() {
   if [[ "$ONLY_CONNECT" == "1" ]]; then
     adb_warn_connect_only_if_suspicious
     if [[ -n "$CONNECT_PORT" ]]; then
-      CONNECT_PORT="${CONNECT_PORT//[[:space:]]/}"
-      [[ "$CONNECT_PORT" =~ ^[0-9]{5}$ ]] || die "Invalid CONNECT PORT (must be 5 digits): '$CONNECT_PORT'"
+      local raw="$CONNECT_PORT" norm=""
+      norm="$(normalize_port_5digits "$raw" 2>/dev/null)" || \
+        die "Invalid CONNECT PORT (must be 5 digits PORT or IP:PORT): '$raw'"
+      CONNECT_PORT="$norm"
     else
       echo "[*] Asking CONNECT PORT..."
-      CONNECT_PORT="$(ask_port_5digits connect "CONNECT PORT")" || die "Timeout waiting CONNECT PORT."
+      CONNECT_PORT="$(ask_connect_port_5digits connect "CONNECT PORT")" || die "Timeout waiting CONNECT PORT."
     fi
 
     local serial="${HOST}:${CONNECT_PORT}"
@@ -136,16 +138,18 @@ adb_pair_connect() {
   fi
 
   if [[ -n "$CONNECT_PORT" ]]; then
-    CONNECT_PORT="${CONNECT_PORT//[[:space:]]/}"
-    [[ "$CONNECT_PORT" =~ ^[0-9]{5}$ ]] || die "Invalid --connect-port (must be 5 digits): '$CONNECT_PORT'"
+    local raw="$CONNECT_PORT" norm=""
+    norm="$(normalize_port_5digits "$raw" 2>/dev/null)" || \
+      die "Invalid --connect-port (must be 5 digits PORT or IP:PORT): '$raw'"
+    CONNECT_PORT="$norm"
   else
     echo "[*] Asking CONNECT PORT..."
-    CONNECT_PORT="$(ask_port_5digits connect "CONNECT PORT")" || die "Timeout waiting CONNECT PORT."
+    CONNECT_PORT="$(ask_connect_port_5digits connect "CONNECT PORT")" || die "Timeout waiting CONNECT PORT."
   fi
 
   echo "[*] Asking PAIR PORT..."
   local pair_port
-  pair_port="$(ask_port_5digits pair "PAIR PORT")" || die "Timeout waiting PAIR PORT."
+  pair_port="$(ask_pair_port_5digits pair "PAIR PORT")" || die "Timeout waiting PAIR PORT."
 
   echo "[*] Asking PAIR CODE..."
   local code
@@ -194,9 +198,9 @@ adb_any_loopback_device() {
 # - Otherwise, return the first loopback device.
 adb_pick_loopback_serial() {
   if [[ -n "${CONNECT_PORT:-}" ]]; then
-    local p="${CONNECT_PORT//[[:space:]]/}"
-    [[ "$p" =~ ^[0-9]{5}$ ]] || return 1
-    local target="${HOST}:${p}"
+      local raw="$CONNECT_PORT" p=""
+      p="$(normalize_port_5digits "$raw" 2>/dev/null)" || return 1
+      local target="${HOST}:${p}"
     [[ "$(adb_device_state "$target")" == "device" ]] && { echo "$target"; return 0; }
     return 1
   fi
@@ -213,8 +217,10 @@ adb_pair_connect_if_needed() {
 
   # If user provided a connect-port, insist on that exact target serial.
   if [[ -n "${CONNECT_PORT:-}" ]]; then
-    CONNECT_PORT="${CONNECT_PORT//[[:space:]]/}"
-    [[ "$CONNECT_PORT" =~ ^[0-9]{5}$ ]] || die "Invalid --connect-port (must be 5 digits): '$CONNECT_PORT'"
+    local raw="$CONNECT_PORT" norm=""
+    norm="$(normalize_port_5digits "$raw" 2>/dev/null)" || \
+      die "Invalid --connect-port (must be 5 digits PORT or IP:PORT): '$raw'"
+    CONNECT_PORT="$norm"
 
     local target="${HOST}:${CONNECT_PORT}"
 
