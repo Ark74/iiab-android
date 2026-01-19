@@ -45,6 +45,17 @@ adb_get_child_restrictions_flag() {
     2>/dev/null | tr -d '\r' || true
 }
 
+# SDK 34 / Android 14 can return 1 / 0 , instead of "true" / "false".
+normalize_bool_tf01() {
+  local v="${1:-}"
+  v="${v//$'\r'/}"
+  v="${v,,}"
+  case "$v" in
+    0|false) echo "false" ;;
+    1|true)  echo "true" ;;
+    *)       echo "${1:-}" ;;
+  esac
+}
 # -------------------------
 # Check readiness (best-effort)
 # -------------------------
@@ -81,6 +92,7 @@ check_readiness() {
   else
     mon="$(adb -s "$serial" shell settings get global settings_enable_monitor_phantom_procs 2>/dev/null | tr -d '\r' || true)"
   fi
+  mon="$(normalize_bool_tf01 "$mon")"
 
   # Get effective value from dumpsys (device_config get may return 'null' even when an effective value exists)
   ds="$(adb -s "$serial" shell dumpsys activity settings 2>/dev/null | tr -d '\r' || true)"
@@ -160,6 +172,7 @@ self_check_android_flags() {
     else
       mon="$(adb -s "$serial" shell settings get global settings_enable_monitor_phantom_procs 2>/dev/null | tr -d '\r' || true)"
     fi
+  mon="$(normalize_bool_tf01 "$mon")"
 
     if [[ "$mon" == "false" ]]; then
       ok " Child restrictions: OK (monitor=false)"
