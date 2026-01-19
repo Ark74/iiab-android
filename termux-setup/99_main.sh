@@ -53,6 +53,9 @@ Usage:
     -> Set PPK only: max_phantom_processes=256 (requires ADB already connected).
        Android 14-16 usually achieve this via "Disable child process restrictions" in Developer Options.
 
+  iiab-termux --iiab-android
+    -> Install/update 'iiab-android' command inside IIAB Debian (does NOT run it).
+
   iiab-termux --check
     -> Check readiness: developer options flag (if readable),
        (Android 14+) "Disable child process restrictions" proxy flag, and (Android 12-13) PPK effective value.
@@ -340,6 +343,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --ppk-only) set_mode "ppk-only"; shift ;;
+    --iiab-android) set_mode "iiab-android"; shift ;;
     --check) set_mode "check"; shift ;;
     --all) set_mode "all"; shift ;;
     --connect-port)
@@ -377,6 +381,84 @@ tty_yesno_default_y() {
   ans="${ans:-Y}"
   [[ "$ans" =~ ^[Nn]$ ]] && return 1
   return 0
+}
+
+tty_yesno_default_n() {
+  # args: prompt
+  # Returns 0 for Yes, 1 for No. Default is No.
+  local prompt="$1" ans="N"
+  if [[ -r /dev/tty ]]; then
+    printf "%s" "$prompt" > /dev/tty
+    read -r ans < /dev/tty || ans="N"
+  else
+    warn "No /dev/tty available; defaulting to NO."
+    ans="N"
+  fi
+  ans="${ans:-N}"
+  [[ "$ans" =~ ^[Yy]$ ]] && return 0
+  return 1
+}
+
+install_iiab_android_cmd() {
+  have proot-distro || die "proot-distro not found"
+  iiab_exists || { warn_red "IIAB Debian (alias 'iiab') not installed."; return 1; }
+
+  local url="${IIAB_ANDROID_URL:-https://raw.githubusercontent.com/iiab/iiab-android/main/iiab-android}"
+  local dest="${IIAB_ANDROID_DEST:-/usr/local/sbin/iiab-android}"
+  local tmp="/tmp/iiab-android.$$"
+
+  local meta old new
+  meta="$(proot-distro login iiab -- env URL="$url" DEST="$dest" TMP="$tmp" bash -lc '
+    set -e
+    old=""
+    if [ -r "$DEST" ]; then old="$(sha256sum "$DEST" 2>/dev/null | cut -d" " -f1 || true)"; fi
+    if ! command -v curl >/dev/null 2>&1; then
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update
+      apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold install ca-certificates curl coreutils
+    fi
+    curl -fsSL --retry 5 --retry-connrefused --retry-delay 2 "$URL" -o "$TMP"
+    head -n1 "$TMP" | grep -q "bash" || { echo "BAD_SHEBANG"; exit 2; }
+    new="$(sha256sum "$TMP" | cut -d" " -f1)"
+    echo "OLD=$old"
+    echo "NEW=$new"
+  ' 2>&1)" || { warn_red "Failed to fetch/install iiab-android in proot."; printf "%s\n" "$meta" | indent >&2; return 1; }"
+
+  if printf '%s\n' "$meta" | grep -q '^BAD_SHEBANG$'; then
+    warn_red "Downloaded iiab-android does not look like a bash script (bad shebang).
+    return 1
+  fi
+  old="$(printf '%s\n' "$meta" | sed -n 's/^OLD=//p' | head -n1)"
+  new="$(printf '%s\n' "$meta" | sed -n 's/^NEW=//p' | head -n1)"
+
+  if [[ -n "$old" && "$old" == "$new" ]]; then
+    ok "iiab-android already up to date inside proot."
+    proot-distro login iiab -- env TMP="$tmp" bash -lc 'rm -f "$TMP" >/dev/null 2>&1 || true' || true
+    return 0
+  fi
+
+  if [[ -n "$old" && "$old" != "$new" ]]; then
+    warn "iiab-android exists and differs inside proot."
+    if ! tty_yesno_default_n "[iiab] Replace existing iiab-android inside proot? [y/N]: "; then
+      warn "Keeping existing iiab-android."
+      proot-distro login iiab -- env TMP="$tmp" bash -lc 'rm -f "$TMP" >/dev/null 2>&1 || true' || true
+     return 0
+    fi
+  fi
+
+  proot-distro login iiab -- env DEST="$dest" TMP="$tmp" bash -lc '
+    set -e
+    mkdir -p "$(dirname "$DEST")"
+    if [ -f "$DEST" ]; then
+      ts="$(date +%Y%m%d-%H%M%S 2>/dev/null || echo now)"
+      mv -f "$DEST" "${DEST}.old.${ts}" 2>/dev/null || true
+    fi
+    install -m 0755 "$TMP" "$DEST"
+    rm -f "$TMP" >/dev/null 2>&1 || true
+  ' || { warn_red "Failed to finalize iiab-android install inside proot."; return 1; }
+
+  ok "Installed inside proot: $dest"
+  ok "Next (inside proot): iiab-android"
 }
 
 all_a14plus_optional_adb() {
@@ -455,12 +537,14 @@ main() {
       step_termux_repo_select_once
       step_termux_base || baseline_bail
       step_iiab_bootstrap_default
+      install_iiab_android_cmd || true
       ;;
 
     with-adb)
       step_termux_repo_select_once
       step_termux_base || baseline_bail
       step_iiab_bootstrap_default
+      install_iiab_android_cmd || true
       adb_pair_connect_if_needed
       ;;
 
@@ -480,6 +564,13 @@ main() {
       ppk_fix_via_adb || true
       ;;
 
+    iiab-android)
+      step_termux_repo_select_once
+      step_termux_base || baseline_bail
+      step_iiab_bootstrap_default
+      install_iiab_android_cmd || true
+      ;;
+
     check)
       step_termux_base || baseline_bail
       check_readiness || true
@@ -489,6 +580,7 @@ main() {
       step_termux_repo_select_once
       step_termux_base || baseline_bail
       step_iiab_bootstrap_default
+      install_iiab_android_cmd || true
       if [[ "${ANDROID_SDK:-}" =~ ^[0-9]+$ ]] && (( ANDROID_SDK >= 34 )); then
         all_a14plus_optional_adb
       else
