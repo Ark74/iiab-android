@@ -396,6 +396,8 @@ all_a14plus_optional_adb() {
   if tty_yesno_default_y "[iiab] Android 14+: Skip ADB pairing/connect steps? [Y/n]: "; then
     warn "Skipping ADB steps (Android 14+)."
     warn "Reminder: enable Developer Options -> 'Disable child process restrictions' (otherwise installs may fail)."
+    CHECK_NO_ADB=1
+    CHECK_SDK="${ANDROID_SDK:-}"
     return 0
   fi
 
