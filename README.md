@@ -47,29 +47,20 @@ http://localhost:8085/maps
 
    * In **Settings > About phone** (sometimes in **Software information**), find the **Build number**, and tap it seven times rapidly!
 
-3. Remove or increase the app child process limit to install and run IIAB:
+3. Prepare the Termux environment. Android 12 and later versions have a feature called ["Phantom Process Killer" (PPK)](https://github.com/agnostic-apollo/Android-Docs/blob/master/en/docs/apps/processes/phantom-cached-and-empty-processes.md), which limits child processes. We need to disable this restriction to run IIAB successfully. In Android 12 and 13, you will disable PPK as part of the Termux environment set up as there is no UI option. For Android 14+, you can disable the restriction using Android Settings (see below). 
 
-    * On Android 14 and later, disable this restriction using Android Settings, in **Developer Options**:
+   On all Android versions, run the following: 
+   ```
+   curl iiab.io/termux.txt | bash
+   ```
+   * In Android 12 and 13, make sure to opt in to the ADB Pair/Connect steps when prompted. You will be asked for 3 values: **Connect Port**, **Pair Port**, and **Pair Code**. Please check this (WIP) [video tutorial](https://ark.switnet.org/vid/termux_adb_pair_a16_hb.mp4) for a more interactive explanation. Once connected to ADB the `0_termux_setup.sh` script will handle the PPK workaround setup.
+   
+   * On Android 14 and later: Disable this restriction using Android Settings, in **Developer Options**:
 
         * `Disable child process restrictions` (English), or
         * `Desactivar restricciones de procesos secundarios` (Spanish)
 
-    * Since Android 12 a feature called ["Phantom Process Killer" (PPK)](https://github.com/agnostic-apollo/Android-Docs/blob/master/en/docs/apps/processes/phantom-cached-and-empty-processes.md) was added to limit child processes, Android 12 and 13 have no UI option to disable this behavior on those versions. Instead, follow the *0_termux-setup.sh* script to setup ADB in a single step (see **Step 4**).
-
-4. Prepare the Termux environment, disable PPK for Android 12 and 13 (via ADB) by running the following command from the Termux CLI (command-line interface):
-
-   ```
-   curl iiab.io/termux.txt | bash
-   ```
-
-   * ADB connection and Android 12 & 13
-
-     By running this setup script, you'll be asked 3 values via notifications: **Connect Port**, **Pair Port**, and **Pair Code**. Please check this (WIP) [video tutorial](https://ark.switnet.org/vid/termux_adb_pair_a16_hb.mp4) for a more interactive explanation. Once connected to ADB the `0_termux_setup.sh` script will handle the PPK workaround setup.
-
-     **Note**: As mentioned before Android 14 - 16 doesn't strictly require ADB connection.
-     So far we currently only use it in order to confirm "Disable child processes restrictions" is Enabled, if you did **Enable** this option, you can skip ADB setup.
-
-   * Once complete, enter [PRoot Distro](https://wiki.termux.com/wiki/PRoot)'s IIAB Debian environment to continue the installation:
+4. Enter [PRoot Distro](https://wiki.termux.com/wiki/PRoot)'s IIAB Debian environment to continue the installation:
 
      ```
      iiab-termux --login
