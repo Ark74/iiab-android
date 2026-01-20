@@ -39,7 +39,7 @@ http://localhost:8085/maps
     - * You will have to Allow installation from unknown sources (or Install unknown apps) from Chrome
 
    * Update the **F-Droid repos**.
-    - Open the F-Droid app and click "Updates".
+     - Open the F-Droid app and click "Updates".
    * Search for **Termux** and install:
     - **Termux** Terminal emulator with packages (com.termux)
     - **Termux:API** Access Android functions from Termux (com.termux.api)
