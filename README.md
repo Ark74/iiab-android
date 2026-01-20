@@ -34,18 +34,22 @@ http://localhost:8085/maps
 
 1. Start with an Android 12-or-higher phone or tablet:
 
-   * Install **F-Droid** as it will be our main source for required apps, it's also a good manager to keep updates and there is no need to open an account.
+   * Install **F-Droid**. It will be our main source for required apps and app updates. As a bonus, there is no need to open an account.
     - [https://f-droid.org/F-Droid.apk](https://f-droid.org/F-Droid.apk)
+    - * You will have to Allow installation from unknown sources (or Install unknown apps) from Chrome
 
-   * Update the F-Doid repos, and search for **Termux** and install
-   * **Termux** (com.termux)
-   * **Termux:API** (com.termux.api)
+   * Update the **F-Droid repos**.
+     - Open the F-Droid app and click "Updates".
+   * Search for **Termux** and install:
+     - **Termux** Terminal emulator with packages (com.termux)
+     - **Termux:API** Access Android functions from Termux (com.termux.api)
+     - * You will have to Allow installation from unknown sources (or Install unknown apps) from F-Droid
 
-   **Note**: You might see a "*This app was built for an older version of Android and cannot be updated automatically*" label on both apps, you can ignore as it only refers for the [*auto-update* feature](https://f-droid.org/en/2024/02/01/twif.html), manual updates will continue to work, you can read more on the topic [here](https://github.com/termux/termux-packages/wiki/Termux-and-Android-10/3e8102ecd05c4954d67971ff2b508f32900265f7).
+   **Note**: You might see a "*This app was built for an older version of Android and cannot be updated automatically*" label on both apps. You can ignore this as it only refers for the [*auto-update* feature](https://f-droid.org/en/2024/02/01/twif.html). Manual updates will continue to work. [Read more here](https://github.com/termux/termux-packages/wiki/Termux-and-Android-10/3e8102ecd05c4954d67971ff2b508f32900265f7).
 
 2. Enable **Developer Options** on Android:
 
-   * In **Settings > About phone** (sometimes in **Software information**), find the **Build number**, and tap it seven times rapidly!
+   * In **Settings > About phone** (or **About tablet**, or **Software information**), find the **Build number** (or **Software version**), and tap it seven times rapidly!
 
 3. Prepare the Termux environment. Android 12 and later versions have a feature called ["Phantom Process Killer" (PPK)](https://github.com/agnostic-apollo/Android-Docs/blob/master/en/docs/apps/processes/phantom-cached-and-empty-processes.md), which limits child processes. We need to disable this restriction to run IIAB successfully. In Android 12 and 13, you will disable PPK as part of the Termux environment set up as there is no UI option. For Android 14+, you can disable the restriction using Android Settings (see below). 
 
