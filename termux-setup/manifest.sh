@@ -7,6 +7,7 @@ MODULES=(
   "20_mod_termux_base.sh"
   "30_mod_iiab-debian.sh"
   "40_mod_termux_api.sh"
+  "45_mod_power_mode.sh"
   "50_mod_adb.sh"
   "60_mod_ppk_checks.sh"
   "99_main.sh"

@@ -80,7 +80,7 @@ Notes:
 EOF
 }
 
-trap 'cleanup_notif >/dev/null 2>&1 || true; release_wakelock >/dev/null 2>&1 || true' EXIT INT TERM
+trap 'power_mode_login_exit >/dev/null 2>&1 || true; cleanup_notif >/dev/null 2>&1 || true; release_wakelock >/dev/null 2>&1 || true' EXIT INT TERM
 
 # NOTE: Termux:API prompts live in 40_mod_termux_api.sh
 
@@ -300,13 +300,19 @@ iiab_login() {
   fi
 
   ok "Entering IIAB Debian (via: iiab-termux --login)"
-
+  power_mode_login_enter || true
   # Preserve interactivity even if logging is enabled (avoid pipes/tee issues).
+  local rc=0
   if [[ -r /dev/tty ]]; then
     proot-distro login iiab </dev/tty >&3 2>&4
+    rc=$?
   else
     proot-distro login iiab
+    rc=$?
   fi
+
+  power_mode_login_exit || true
+  return $rc
 }
 # -------------------------
 # Args
