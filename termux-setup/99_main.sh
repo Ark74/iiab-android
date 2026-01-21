@@ -373,7 +373,7 @@ tty_yesno_default_y() {
   # Returns 0 for Yes, 1 for No. Default is Yes.
   local prompt="$1" ans="Y"
   if [[ -r /dev/tty ]]; then
-    printf "%s" "$prompt" > /dev/tty
+    printf "%s" "$prompt"
     if ! read -r ans < /dev/tty; then
       ans="Y"
     fi
@@ -391,7 +391,7 @@ tty_yesno_default_n() {
   # Returns 0 for Yes, 1 for No. Default is No.
   local prompt="$1" ans="N"
   if [[ -r /dev/tty ]]; then
-    printf "%s" "$prompt" > /dev/tty
+    printf "%s" "$prompt"
     read -r ans < /dev/tty || ans="N"
   else
     warn "No /dev/tty available; defaulting to NO."

@@ -58,10 +58,9 @@ setup_logging() {
 
   prune_old_logs
 
-  # Duplicate stdout/stderr to console + log (strip ANSI in log)
-  exec \
-    > >(tee >(sed -E 's/\x1B\[[0-9;]*[ -/]*[@-~]//g' >>"$LOG_FILE")) \
-    2> >(tee >(sed -E 's/\x1B\[[0-9;]*[ -/]*[@-~]//g' >>"$LOG_FILE") >&2)
+      # Duplicate stdout/stderr to console + log (strip ANSI in log)
+      # Single pipeline for stable ordering (no stdout/stderr interleaving) at FD3.
+      exec > >(tee >(sed -E 's/\x1B\[[0-9;]*[ -/]*[@-~]//g' >>"$LOG_FILE") >&3) 2>&1
 
   ok "Logging to: $LOG_FILE"
 

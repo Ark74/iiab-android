@@ -71,22 +71,17 @@ step_termux_repo_select_once() {
   fi
 
   if [[ -r /dev/tty ]]; then
-    printf "\n${YEL}[iiab] One-time setup:${RST} Select a nearby Termux repository mirror for faster downloads.\n" >&2
+    printf "\n${YEL}[iiab] One-time setup:${RST} Select a nearby Termux repository mirror for faster downloads.\n"
     local ans="Y"
-    printf "[iiab] Launch termux-change-repo now? [Y/n]: " > /dev/tty
-    if ! read -r ans < /dev/tty; then
+    printf "[iiab] Launch termux-change-repo now? [Y/n]: "
+    if ! IFS= read -r ans < /dev/tty; then
       warn "No interactive TTY available; skipping mirror selection (run 'termux-change-repo' directly to be prompted)."
       return 0
     fi
     ans="${ans:-Y}"
     if [[ "$ans" =~ ^[Yy]$ ]]; then
-      # Logging redirects stdout/stderr to pipes, which can break the UI.
-      # Run it using /dev/tty and the original console fds (3/4).
-      if [[ -r /dev/tty ]]; then
-        termux-change-repo </dev/tty >&3 2>&4 || true
-      else
-        termux-change-repo || true
-      fi
+      # Run interactive UI against /dev/tty and original console fds (3/4).
+      termux-change-repo </dev/tty >&3 2>&4 || true
       ok "Mirror selection completed (or skipped inside the UI)."
     else
       warn "Mirror selection skipped by user."

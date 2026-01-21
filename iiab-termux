@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # -----------------------------------------------------------------------------
-# GENERATED FILE: 2026-01-19T14:50:04-06:00 - do not edit directly.
+# GENERATED FILE: 2026-01-20T22:17:22-06:00 - do not edit directly.
 # Source modules: termux-setup/*.sh + manifest.sh
 # Rebuild: (cd termux-setup && bash build_bundle.sh)
 # -----------------------------------------------------------------------------
@@ -115,10 +115,9 @@ setup_logging() {
 
   prune_old_logs
 
-  # Duplicate stdout/stderr to console + log (strip ANSI in log)
-  exec \
-    > >(tee >(sed -E 's/\x1B\[[0-9;]*[ -/]*[@-~]//g' >>"$LOG_FILE")) \
-    2> >(tee >(sed -E 's/\x1B\[[0-9;]*[ -/]*[@-~]//g' >>"$LOG_FILE") >&2)
+      # Duplicate stdout/stderr to console + log (strip ANSI in log)
+      # Single pipeline for stable ordering (no stdout/stderr interleaving) at FD3.
+      exec > >(tee >(sed -E 's/\x1B\[[0-9;]*[ -/]*[@-~]//g' >>"$LOG_FILE") >&3) 2>&1
 
   ok "Logging to: $LOG_FILE"
 
@@ -209,22 +208,17 @@ step_termux_repo_select_once() {
   fi
 
   if [[ -r /dev/tty ]]; then
-    printf "\n${YEL}[iiab] One-time setup:${RST} Select a nearby Termux repository mirror for faster downloads.\n" >&2
+    printf "\n${YEL}[iiab] One-time setup:${RST} Select a nearby Termux repository mirror for faster downloads.\n"
     local ans="Y"
-    printf "[iiab] Launch termux-change-repo now? [Y/n]: " > /dev/tty
-    if ! read -r ans < /dev/tty; then
+    printf "[iiab] Launch termux-change-repo now? [Y/n]: "
+    if ! IFS= read -r ans < /dev/tty; then
       warn "No interactive TTY available; skipping mirror selection (run 'termux-change-repo' directly to be prompted)."
       return 0
     fi
     ans="${ans:-Y}"
     if [[ "$ans" =~ ^[Yy]$ ]]; then
-      # Logging redirects stdout/stderr to pipes, which can break the UI.
-      # Run it using /dev/tty and the original console fds (3/4).
-      if [[ -r /dev/tty ]]; then
-        termux-change-repo </dev/tty >&3 2>&4 || true
-      else
-        termux-change-repo || true
-      fi
+      # Run interactive UI against /dev/tty and original console fds (3/4).
+      termux-change-repo </dev/tty >&3 2>&4 || true
       ok "Mirror selection completed (or skipped inside the UI)."
     else
       warn "Mirror selection skipped by user."
@@ -1417,7 +1411,7 @@ tty_yesno_default_y() {
   # Returns 0 for Yes, 1 for No. Default is Yes.
   local prompt="$1" ans="Y"
   if [[ -r /dev/tty ]]; then
-    printf "%s" "$prompt" > /dev/tty
+    printf "%s" "$prompt"
     if ! read -r ans < /dev/tty; then
       ans="Y"
     fi
@@ -1435,7 +1429,7 @@ tty_yesno_default_n() {
   # Returns 0 for Yes, 1 for No. Default is No.
   local prompt="$1" ans="N"
   if [[ -r /dev/tty ]]; then
-    printf "%s" "$prompt" > /dev/tty
+    printf "%s" "$prompt"
     read -r ans < /dev/tty || ans="N"
   else
     warn "No /dev/tty available; defaulting to NO."
