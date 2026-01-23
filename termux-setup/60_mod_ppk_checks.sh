@@ -41,8 +41,7 @@ EOF
 # OFF -> true, ON -> false
 adb_get_child_restrictions_flag() {
   local serial="$1"
-  adb -s "$serial" shell getprop persist.sys.fflag.override.settings_enable_monitor_phantom_procs \
-    2>/dev/null | tr -d '\r' || true
+  adb -s "$serial" shell getprop persist.sys.fflag.override.settings_enable_monitor_phantom_procs 2>/dev/null | tr -d '\r' || true
 }
 
 # SDK 34 / Android 14 can return 1 / 0 , instead of "true" / "false".

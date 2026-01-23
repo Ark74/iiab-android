@@ -267,6 +267,28 @@ iiab_login() {
     return 1
   fi
 
+  # Reminder: Android battery policy must be configured before long installs.
+  if [[ "${POWER_MODE_BATTERY_PROMPT:-1}" -eq 1 ]]; then
+    local bst="$POWER_MODE_BATTERY_STAMP"
+    if [[ ! -f "$bst" ]]; then
+      warn "Reminder: for reliable long installs, set Termux -> Battery to 'Unrestricted'."
+      power_mode_battery_instructions
+      if tty_yesno_default_n "[iiab] Open Termux App info now to adjust Battery policy? [y/N]: "; then
+        if android_open_termux_app_info; then
+          printf "[iiab] When done, return to Termux and press Enter to continue... " >&3
+          if [[ -r /dev/tty ]]; then
+            read -r _ </dev/tty || true
+          else
+            printf "\n" >&3
+          fi
+          date > "$bst" 2>/dev/null || true
+        else
+          warn "Unable to open Settings automatically. Open manually: Settings -> Apps -> Termux."
+        fi
+      fi
+    fi
+  fi
+
   # Best-effort Android advice before user starts doing heavy installs inside proot.
   local sdk="${ANDROID_SDK:-}"
   if [[ "$sdk" =~ ^[0-9]+$ ]] && (( sdk >= 31 && sdk <= 33 )); then
@@ -552,6 +574,7 @@ main() {
       return $?
       ;;
     baseline)
+      power_mode_offer_battery_settings_once || true
       step_termux_repo_select_once
       step_termux_base || baseline_bail
       step_iiab_bootstrap_default
@@ -559,6 +582,7 @@ main() {
       ;;
 
     with-adb)
+      power_mode_offer_battery_settings_once || true
       step_termux_repo_select_once
       step_termux_base || baseline_bail
       step_iiab_bootstrap_default
@@ -583,6 +607,7 @@ main() {
       ;;
 
     iiab-android)
+      power_mode_offer_battery_settings_once || true
       step_termux_repo_select_once
       step_termux_base || baseline_bail
       step_iiab_bootstrap_default
@@ -595,6 +620,7 @@ main() {
       ;;
 
     all)
+      power_mode_offer_battery_settings_once || true
       step_termux_repo_select_once
       step_termux_base || baseline_bail
       step_iiab_bootstrap_default

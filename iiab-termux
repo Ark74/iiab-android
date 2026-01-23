@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # -----------------------------------------------------------------------------
-# GENERATED FILE: 2026-01-23T06:51:35-06:00 - do not edit directly.
+# GENERATED FILE: 2026-01-23T10:42:21-06:00 - do not edit directly.
 # Source modules: termux-setup/*.sh + manifest.sh
 # Rebuild: (cd termux-setup && bash build_bundle.sh)
 # -----------------------------------------------------------------------------
@@ -50,6 +50,13 @@ TIMEOUT_SECS="${TIMEOUT_SECS:-180}"
 # Defaults used by ADB flows / logging / misc
 CLEANUP_OFFLINE="${CLEANUP_OFFLINE:-1}"
 DEBUG="${DEBUG:-0}"
+
+# Package name for the Termux app.
+TERMUX_PACKAGE="${TERMUX_PACKAGE:-com.termux}"
+
+# One-time helper: guide user to set Termux battery policy to keep sessions alive.
+POWER_MODE_BATTERY_PROMPT="${POWER_MODE_BATTERY_PROMPT:-1}"  # 1=ask, 0=never ask
+POWER_MODE_BATTERY_STAMP="${POWER_MODE_BATTERY_STAMP:-$STATE_DIR/stamp.termux_battery_settings}"
 
 # ---- END 00_lib_common.sh ----
 
@@ -193,7 +200,89 @@ release_wakelock() {
   if [[ "$WAKELOCK_HELD" -eq 1 ]] && have termux-wake-unlock; then
     termux-wake-unlock || true
     ok "Wakelock released (termux-wake-unlock)."
+    WAKELOCK_HELD=0
   fi
+}
+
+# -------------------------
+# Set Battery usage step.
+# -------------------------
+android_am_bin() {
+  # Return a usable 'am' binary path.
+  if have am; then
+    command -v am
+    return 0
+  fi
+  [[ -x /system/bin/am ]] && { echo /system/bin/am; return 0; }
+  return 1
+}
+
+android_start_activity() {
+  # Start an Android activity via 'am'.
+  local ambin
+  ambin="$(android_am_bin 2>/dev/null)" || return 1
+  "$ambin" start "$@" >/dev/null 2>&1
+}
+
+android_open_termux_app_info() {
+  # Open Settings -> App info -> Termux (most standard across vendors).
+  android_start_activity -a android.settings.APPLICATION_DETAILS_SETTINGS -d "package:${TERMUX_PACKAGE}"
+}
+
+android_open_battery_optimization_list() {
+  # Optional fallback screen (varies by vendor).
+  android_start_activity -a android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS
+}
+
+power_mode_battery_instructions() {
+  {
+    # Use color to show block text.
+    printf "%b" "${BLU}"
+    cat <<'EOF'
+[iiab] Power-mode needs one manual Android setting (once):
+  Settings -> Apps -> Termux -> Battery
+    - Set: Unrestricted   (or: Don't optimize / No restrictions)
+    - Allow background activity = ON (if present)
+
+If you can't find Battery under App info, use Android's Battery optimization list
+and set Termux to "Don't optimize".
+
+Note: Power-mode (wakelock + notification) helps keep the session alive,
+but it cannot override Android's battery restrictions.
+EOF
+    printf "%b" "${RST}"
+  } >&3
+}
+
+power_mode_offer_battery_settings_once() {
+  [[ "${POWER_MODE_BATTERY_PROMPT:-1}" -eq 1 ]] || return 0
+  mkdir -p "$STATE_DIR" >/dev/null 2>&1 || true
+
+  local stamp="$POWER_MODE_BATTERY_STAMP"
+  [[ -f "$stamp" ]] && return 0
+
+  power_mode_battery_instructions
+
+  if tty_yesno_default_y "[iiab] Open Termux App info now to adjust Battery policy? [Y/n]: "; then
+    if android_open_termux_app_info; then
+      printf "[iiab] When done, return to Termux and press Enter to continue... " >&3
+      if [[ -r /dev/tty ]]; then
+        read -r _ </dev/tty || true
+      else
+        printf "\n" >&3
+      fi
+      date > "$stamp" 2>/dev/null || true
+    else
+      warn "Unable to open Settings automatically. Open manually: Settings -> Apps -> Termux."
+      warn "Fallback: you may try opening the Battery optimization list from Android settings."
+      # Best-effort fallback (ignore errors)
+      android_open_battery_optimization_list || true
+      # Do not stamp here: user likely still needs to configure it.
+    fi
+  else
+    warn "Battery settings step skipped by user; you'll be asked again next time."
+  fi
+  return 0
 }
 
 # -------------------------
@@ -284,7 +373,8 @@ step_termux_base() {
     proot \
     proot-distro \
     sed \
-    termux-api
+    termux-api \
+    which
   then
     BASELINE_ERR="termux_apt install (baseline deps)"
     baseline_bail_details
@@ -603,7 +693,7 @@ power_mode_login_enter() {
   fi
 
   local title="Internet-in-a-Box on Android"
-  local content="IIAB session active (proot). Keep the session running with the screen off."
+  local content="IIAB session active (proot). To keep the session running with the screen off, don't forget to set unrestricted battery usage."
 
   if termux-notification \
       --id "$LOGIN_NOTIF_ID" \
@@ -968,8 +1058,7 @@ EOF
 # OFF -> true, ON -> false
 adb_get_child_restrictions_flag() {
   local serial="$1"
-  adb -s "$serial" shell getprop persist.sys.fflag.override.settings_enable_monitor_phantom_procs \
-    2>/dev/null | tr -d '\r' || true
+  adb -s "$serial" shell getprop persist.sys.fflag.override.settings_enable_monitor_phantom_procs 2>/dev/null | tr -d '\r' || true
 }
 
 # SDK 34 / Android 14 can return 1 / 0 , instead of "true" / "false".
@@ -1404,6 +1493,28 @@ iiab_login() {
     return 1
   fi
 
+  # Reminder: Android battery policy must be configured before long installs.
+  if [[ "${POWER_MODE_BATTERY_PROMPT:-1}" -eq 1 ]]; then
+    local bst="$POWER_MODE_BATTERY_STAMP"
+    if [[ ! -f "$bst" ]]; then
+      warn "Reminder: for reliable long installs, set Termux -> Battery to 'Unrestricted'."
+      power_mode_battery_instructions
+      if tty_yesno_default_n "[iiab] Open Termux App info now to adjust Battery policy? [y/N]: "; then
+        if android_open_termux_app_info; then
+          printf "[iiab] When done, return to Termux and press Enter to continue... " >&3
+          if [[ -r /dev/tty ]]; then
+            read -r _ </dev/tty || true
+          else
+            printf "\n" >&3
+          fi
+          date > "$bst" 2>/dev/null || true
+        else
+          warn "Unable to open Settings automatically. Open manually: Settings -> Apps -> Termux."
+        fi
+      fi
+    fi
+  fi
+
   # Best-effort Android advice before user starts doing heavy installs inside proot.
   local sdk="${ANDROID_SDK:-}"
   if [[ "$sdk" =~ ^[0-9]+$ ]] && (( sdk >= 31 && sdk <= 33 )); then
@@ -1689,6 +1800,7 @@ main() {
       return $?
       ;;
     baseline)
+      power_mode_offer_battery_settings_once || true
       step_termux_repo_select_once
       step_termux_base || baseline_bail
       step_iiab_bootstrap_default
@@ -1696,6 +1808,7 @@ main() {
       ;;
 
     with-adb)
+      power_mode_offer_battery_settings_once || true
       step_termux_repo_select_once
       step_termux_base || baseline_bail
       step_iiab_bootstrap_default
@@ -1720,6 +1833,7 @@ main() {
       ;;
 
     iiab-android)
+      power_mode_offer_battery_settings_once || true
       step_termux_repo_select_once
       step_termux_base || baseline_bail
       step_iiab_bootstrap_default
@@ -1732,6 +1846,7 @@ main() {
       ;;
 
     all)
+      power_mode_offer_battery_settings_once || true
       step_termux_repo_select_once
       step_termux_base || baseline_bail
       step_iiab_bootstrap_default

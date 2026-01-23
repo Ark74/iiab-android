@@ -56,7 +56,89 @@ release_wakelock() {
   if [[ "$WAKELOCK_HELD" -eq 1 ]] && have termux-wake-unlock; then
     termux-wake-unlock || true
     ok "Wakelock released (termux-wake-unlock)."
+    WAKELOCK_HELD=0
   fi
+}
+
+# -------------------------
+# Set Battery usage step.
+# -------------------------
+android_am_bin() {
+  # Return a usable 'am' binary path.
+  if have am; then
+    command -v am
+    return 0
+  fi
+  [[ -x /system/bin/am ]] && { echo /system/bin/am; return 0; }
+  return 1
+}
+
+android_start_activity() {
+  # Start an Android activity via 'am'.
+  local ambin
+  ambin="$(android_am_bin 2>/dev/null)" || return 1
+  "$ambin" start "$@" >/dev/null 2>&1
+}
+
+android_open_termux_app_info() {
+  # Open Settings -> App info -> Termux (most standard across vendors).
+  android_start_activity -a android.settings.APPLICATION_DETAILS_SETTINGS -d "package:${TERMUX_PACKAGE}"
+}
+
+android_open_battery_optimization_list() {
+  # Optional fallback screen (varies by vendor).
+  android_start_activity -a android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS
+}
+
+power_mode_battery_instructions() {
+  {
+    # Use color to show block text.
+    printf "%b" "${BLU}"
+    cat <<'EOF'
+[iiab] Power-mode needs one manual Android setting:
+  Settings -> Apps -> Termux -> Battery
+    - Set: Unrestricted (or: Don't optimize / No restrictions)
+    - Allow background activity = ON (if present)
+
+If you can't find Battery under App info, use Android's Battery optimization list
+and set Termux to "Don't optimize".
+
+Note: Power-mode (wakelock + notification) helps keep the session alive,
+but it cannot override Android's battery restrictions.
+EOF
+    printf "%b" "${RST}"
+  } >&3
+}
+
+power_mode_offer_battery_settings_once() {
+  [[ "${POWER_MODE_BATTERY_PROMPT:-1}" -eq 1 ]] || return 0
+  mkdir -p "$STATE_DIR" >/dev/null 2>&1 || true
+
+  local stamp="$POWER_MODE_BATTERY_STAMP"
+  [[ -f "$stamp" ]] && return 0
+
+  power_mode_battery_instructions
+
+  if tty_yesno_default_y "[iiab] Open Termux App info now to adjust Battery policy? [Y/n]: "; then
+    if android_open_termux_app_info; then
+      printf "[iiab] When done, return to Termux and press Enter to continue... " >&3
+      if [[ -r /dev/tty ]]; then
+        read -r _ </dev/tty || true
+      else
+        printf "\n" >&3
+      fi
+      date > "$stamp" 2>/dev/null || true
+    else
+      warn "Unable to open Settings automatically. Open manually: Settings -> Apps -> Termux."
+      warn "Fallback: you may try opening the Battery optimization list from Android settings."
+      # Best-effort fallback (ignore errors)
+      android_open_battery_optimization_list || true
+      # Do not stamp here: user likely still needs to configure it.
+    fi
+  else
+    warn "Battery settings step skipped by user; you'll be asked again next time."
+  fi
+  return 0
 }
 
 # -------------------------
@@ -147,7 +229,8 @@ step_termux_base() {
     proot \
     proot-distro \
     sed \
-    termux-api
+    termux-api \
+    which
   then
     BASELINE_ERR="termux_apt install (baseline deps)"
     baseline_bail_details
