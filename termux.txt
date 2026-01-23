@@ -20,19 +20,23 @@ CURL=(curl -fsSL --retry 5 --retry-connrefused --retry-delay 2)
 
 PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 DEST="$PREFIX/bin/iiab-termux"
+STATE_DIR="${HOME}/.iiab-android"
+BACKUP_DIR="${STATE_DIR}/termux"
 BUNDLE_PRIMARY="https://raw.githubusercontent.com/iiab/iiab-android/main/iiab-termux"
+mkdir -p "$BACKUP_DIR"
+
+# Migrate pre-existing backups that were left in $PREFIX (old behavior).
+shopt -s nullglob
+for f in "${PREFIX}/bin/iiab-termux.old."*; do
+  mv -f -- "$f" "$BACKUP_DIR/" 2>/dev/null || true
+done
+shopt -u nullglob
 
 # Temporary file
 mkdir -p "${DEST%/*}"
 tmp="${DEST}.tmp.$$"
 cleanup() { rm -f "$tmp" >/dev/null 2>&1 || true; }
 trap cleanup EXIT INT TERM
-
-# Backup existing installed command
-if [[ -f "$DEST" ]]; then
-  ts="$(date +%Y%m%d-%H%M%S 2>/dev/null || echo now)"
-  mv -f "$DEST" "${DEST}.old.${ts}" 2>/dev/null || true
-fi
 
 log "Downloading iiab-termux bundle..."
 "${CURL[@]}" "$BUNDLE_PRIMARY" -o "$tmp" || die "Unable to download bundle from URL."
@@ -45,8 +49,14 @@ if [[ "$first_line" != \#!*bash* ]]; then
   die "Downloaded content doesn't look like a bash script (wrong URL or HTML error page)."
 fi
 
+# Backup existing installed command
+if [[ -f "$DEST" ]]; then
+  ts="$(date +%Y%m%d-%H%M%S)"
+  mv -f "$DEST" "${BACKUP_DIR}/iiab-termux.old.${ts}" 2>/dev/null || true
+fi
+
 chmod 0755 "$tmp"
-mv -f "$tmp" "$DEST"
+mv -f -- "$tmp" "$DEST"
 log "Installed: $DEST"
 
 # Run installed command:
