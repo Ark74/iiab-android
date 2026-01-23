@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # -----------------------------------------------------------------------------
-# GENERATED FILE: 2026-01-23T06:02:27-06:00 - do not edit directly.
+# GENERATED FILE: 2026-01-23T06:51:35-06:00 - do not edit directly.
 # Source modules: termux-setup/*.sh + manifest.sh
 # Rebuild: (cd termux-setup && bash build_bundle.sh)
 # -----------------------------------------------------------------------------
@@ -280,7 +280,6 @@ step_termux_base() {
     curl \
     gawk \
     grep \
-    iputils-ping \
     openssh \
     proot \
     proot-distro \
@@ -384,7 +383,13 @@ step_iiab_bootstrap_default() {
     export DEBIAN_FRONTEND=noninteractive
     apt-get update
     apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
-      install ca-certificates coreutils curl e2fsprogs netcat-traditional sudo
+      install ca-certificates \
+              coreutils \
+              curl \
+              e2fsprogs \
+              iputils-ping \
+              netcat-traditional \
+              sudo
   '
   rc=$?
   set -e

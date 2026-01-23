@@ -143,7 +143,6 @@ step_termux_base() {
     curl \
     gawk \
     grep \
-    iputils-ping \
     openssh \
     proot \
     proot-distro \
