@@ -85,6 +85,41 @@ trap 'power_mode_login_exit >/dev/null 2>&1 || true; cleanup_notif >/dev/null 2>
 # NOTE: Termux:API prompts live in 40_mod_termux_api.sh
 
 # -------------------------
+# OS guardrails
+# -------------------------
+# Guard: avoid running iiab-termux inside proot-distro rootfs.
+in_proot_rootfs() {
+  # Debian rootfs indicator
+  [ -f /etc/os-release ] && return 0
+  [ -f /etc/debian_version ] && return 0
+  return 1
+}
+
+termux_path_leaked() {
+  # Termux prefix on PATH indicates we're inside proot but inheriting host tools
+  printf '%s' "${PATH:-}" | grep -q '/data/data/com\.termux/files/usr/'
+}
+
+guard_no_iiab_termux_in_proot() {
+  if in_proot_rootfs && termux_path_leaked; then
+    warn_red_context "Detected proot environment: IIAB Debian"
+    warn "Don't run iiab-termux inside IIAB Debian"
+    ok   "In order to run a first-time install run:"
+    ok   "  iiab-android"
+    blank
+    warn "To resume or continue an installation in progress, use the usual IIAB command:"
+    ok   "  iiab"
+    blank
+    warn "If you meant to prepare Termux, exit proot and run:"
+    ok   "  iiab-termux --all"
+    exit 2
+  fi
+}
+
+guard_no_iiab_termux_in_proot
+
+
+# -------------------------
 # Self-check
 # -------------------------
 self_check() {

@@ -101,12 +101,12 @@ EOF
     # Print body in blue
     printf '%b' "${BLU}"
     cat <<'EOF'
-  Settings -> Apps -> Termux -> Battery
-    - Set: Unrestricted
-      - or: Don't optimize / No restrictions
-    - Allow background activity = ON (if present)
+ Settings -> Apps -> Termux -> Battery
+   - Set: Unrestricted
+     - or: Don't optimize / No restrictions
+   - Allow background activity = ON (if present)
 
-  If you can't find Battery under App info, use Android's Battery optimization list and set Termux to "Don't optimize".
+ If you can't find Battery under App info, use Android's Battery optimization list and set Termux to "Don't optimize".
 
 > Note: Power-mode (wakelock + notification) helps keep the session alive, but it cannot override Android's battery restrictions.
 
