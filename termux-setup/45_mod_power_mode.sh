@@ -34,7 +34,7 @@ power_mode_login_enter() {
   fi
 
   local title="Internet-in-a-Box on Android"
-  local content="IIAB session active (proot). Keep the session running with the screen off."
+  local content="IIAB session active (proot). For screen-off running, please set battery usage to Unrestricted"
 
   if termux-notification \
       --id "$LOGIN_NOTIF_ID" \

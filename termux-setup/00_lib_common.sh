@@ -39,3 +39,10 @@ TIMEOUT_SECS="${TIMEOUT_SECS:-180}"
 # Defaults used by ADB flows / logging / misc
 CLEANUP_OFFLINE="${CLEANUP_OFFLINE:-1}"
 DEBUG="${DEBUG:-0}"
+
+# Package name for the Termux app.
+TERMUX_PACKAGE="${TERMUX_PACKAGE:-com.termux}"
+
+# One-time helper: guide user to set Termux battery policy to keep sessions alive.
+POWER_MODE_BATTERY_PROMPT="${POWER_MODE_BATTERY_PROMPT:-1}"  # 1=ask, 0=never ask
+POWER_MODE_BATTERY_STAMP="${POWER_MODE_BATTERY_STAMP:-$STATE_DIR/stamp.termux_battery_settings}"
