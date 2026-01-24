@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # -----------------------------------------------------------------------------
-# GENERATED FILE: 2026-01-23T14:47:50-06:00 - do not edit directly.
+# GENERATED FILE: 2026-01-24T05:24:21-06:00 - do not edit directly.
 # Source modules: termux-setup/*.sh + manifest.sh
 # Rebuild: (cd termux-setup && bash build_bundle.sh)
 # -----------------------------------------------------------------------------
@@ -23,6 +23,12 @@ indent()   { sed 's/^/ /'; }
 have() { command -v "$1" >/dev/null 2>&1; }
 need() { have "$1" || return 1; }
 die()  { echo "[!] $*" >&2; exit 1; }
+
+blank() {
+  local n=${1:-1} fd=1
+  if : 2>/dev/null >&3; then fd=3; fi
+  while ((n-- > 0)); do printf '\n' >&"$fd"; done
+}
 
 # Choose warning level depending on context.
 # - In explicit readiness checks (--check/--all), use red for "will likely fail".
@@ -245,12 +251,12 @@ EOF
     # Print body in blue
     printf '%b' "${BLU}"
     cat <<'EOF'
-  Settings -> Apps -> Termux -> Battery
-    - Set: Unrestricted
-      - or: Don't optimize / No restrictions
-    - Allow background activity = ON (if present)
+ Settings -> Apps -> Termux -> Battery
+   - Set: Unrestricted
+     - or: Don't optimize / No restrictions
+   - Allow background activity = ON (if present)
 
-  If you can't find Battery under App info, use Android's Battery optimization list and set Termux to "Don't optimize".
+ If you can't find Battery under App info, use Android's Battery optimization list and set Termux to "Don't optimize".
 
 > Note: Power-mode (wakelock + notification) helps keep the session alive, but it cannot override Android's battery restrictions.
 
@@ -1316,6 +1322,41 @@ EOF
 trap 'power_mode_login_exit >/dev/null 2>&1 || true; cleanup_notif >/dev/null 2>&1 || true; release_wakelock >/dev/null 2>&1 || true' EXIT INT TERM
 
 # NOTE: Termux:API prompts live in 40_mod_termux_api.sh
+
+# -------------------------
+# OS guardrails
+# -------------------------
+# Guard: avoid running iiab-termux inside proot-distro rootfs.
+in_proot_rootfs() {
+  # Debian rootfs indicator
+  [ -f /etc/os-release ] && return 0
+  [ -f /etc/debian_version ] && return 0
+  return 1
+}
+
+termux_path_leaked() {
+  # Termux prefix on PATH indicates we're inside proot but inheriting host tools
+  printf '%s' "${PATH:-}" | grep -q '/data/data/com\.termux/files/usr/'
+}
+
+guard_no_iiab_termux_in_proot() {
+  if in_proot_rootfs && termux_path_leaked; then
+    warn_red_context "Detected proot environment: IIAB Debian"
+    warn "Don't run iiab-termux inside IIAB Debian"
+    ok   "In order to run a first-time install run:"
+    ok   "  iiab-android"
+    blank
+    warn "To resume or continue an installation in progress, use the usual IIAB command:"
+    ok   "  iiab"
+    blank
+    warn "If you meant to prepare Termux, exit proot and run:"
+    ok   "  iiab-termux --all"
+    exit 2
+  fi
+}
+
+guard_no_iiab_termux_in_proot
+
 
 # -------------------------
 # Self-check

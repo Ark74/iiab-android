@@ -13,6 +13,12 @@ have() { command -v "$1" >/dev/null 2>&1; }
 need() { have "$1" || return 1; }
 die()  { echo "[!] $*" >&2; exit 1; }
 
+blank() {
+  local n=${1:-1} fd=1
+  if : 2>/dev/null >&3; then fd=3; fi
+  while ((n-- > 0)); do printf '\n' >&"$fd"; done
+}
+
 # Choose warning level depending on context.
 # - In explicit readiness checks (--check/--all), use red for "will likely fail".
 # - In passive/self-check (baseline runs), keep it yellow to avoid over-alarming.
