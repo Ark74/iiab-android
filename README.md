@@ -238,8 +238,6 @@ If you want to remove the IIAB installation and all associated apps, follow thes
 
    **Note:** All content in that IIAB installation will be deleted when executing this command. Back up your content first if you plan to reinstall later.
 
-2. Remove / uninstall the Termux app.
+2. Uninstall both apps, Termux and Termux-API, if you no longer need them.
 
-3. If applicable, remove / uninstall the Shizuku app (Android 12–13).
-
-4. Disable Developer Options.
+3. Disable Developer Options.
