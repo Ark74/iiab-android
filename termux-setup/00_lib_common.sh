@@ -14,9 +14,10 @@ need() { have "$1" || return 1; }
 die()  { echo "[!] $*" >&2; exit 1; }
 
 blank() {
-  local n=${1:-1} fd=1
-  if : 2>/dev/null >&3; then fd=3; fi
-  while ((n-- > 0)); do printf '\n' >&"$fd"; done
+  local n="${1:-1}" fd=1
+  [[ "$n" =~ ^[0-9]+$ ]] || n=1
+  if { : >&3; } 2>/dev/null; then fd=3; fi
+  while (( n-- > 0 )); do printf '\n' >&"$fd"; done
 }
 
 # Choose warning level depending on context.
