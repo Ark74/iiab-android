@@ -76,6 +76,9 @@ Usage:
 Notes:
 - ADB prompts require: `pkg install termux-api` + Termux:API app installed + notification permission.
 - Wireless debugging must be enabled on Android 12 & 13
+- Wireless debugging (pairing code / QR) is available on Android 11 and later versions.
+- Android 8-10: there is no Wireless debugging pairing flow. ADB-over-network typically requires
+  a one-time USB setup from another host (e.g. `adb tcpip 5555`), so iiab-termux skips ADB there.
 EOF
 }
 
@@ -426,6 +429,7 @@ while [[ $# -gt 0 ]]; do
     --log-file) LOG_FILE="${2:-}"; shift 2 ;;
     --debug) DEBUG=1; shift ;;
     -h|--help) usage; exit 0 ;;
+    --*) die "Unknown option: $1. See --help." ;;
     *) shift ;;
   esac
 done
@@ -570,6 +574,46 @@ all_a14plus_optional_adb() {
   return 0
 }
 
+sdk_is_num() { [[ "${ANDROID_SDK:-}" =~ ^[0-9]+$ ]]; }
+sdk_le() { local n="$1"; sdk_is_num && (( ANDROID_SDK <= n )); }
+sdk_eq() { local n="$1"; sdk_is_num && (( ANDROID_SDK == n )); }
+
+warn_skip_adb_pre11() {
+  warn "Android 8-10: skipping ADB steps (Wireless debugging pairing is not available)."
+  warn "This is OK: so far, our testing indicates ADB is not required on those versions."
+}
+
+warn_adb_only_pre11() {
+  warn "Android 8-10: --adb-only cannot run Wireless debugging pairing (Android 11+ feature)."
+  warn "So far, our documentation indicates ADB is not required on Android 8-10."
+}
+
+all_a11_optional_adb() {
+  # Android 11: ADB is optional. If already connected, run checks (no prompts).
+  local serial=""
+  if have adb; then
+    adb start-server >/dev/null 2>&1 || true
+    if serial="$(adb_pick_loopback_serial 2>/dev/null)"; then
+      ok "ADB already connected: $serial (running checks, no prompts)."
+      check_readiness || true
+      return 0
+    fi
+  fi
+
+  # Not connected -> allow skip (same as A14+ optional ADB)
+  if tty_yesno_default_y "[iiab] Android 11: Skip ADB pairing/connect steps? [Y/n]: "; then
+    warn "Skipping ADB steps (Android 11)."
+    warn "Note: Wireless debugging is optional here; installs usually work without ADB."
+    CHECK_NO_ADB=1
+    CHECK_SDK="${ANDROID_SDK:-}"
+    return 0
+  fi
+
+  adb_pair_connect_if_needed
+  check_readiness || true
+  return 0
+}
+
 validate_args() {
   if [[ -n "${CONNECT_PORT:-}" ]]; then
     local raw="$CONNECT_PORT" norm=""
@@ -628,11 +672,21 @@ main() {
       step_termux_base || baseline_bail
       step_iiab_bootstrap_default
       install_iiab_android_cmd || true
+      # Android 8-10: skip ADB (no Wireless debugging pairing).
+      if sdk_le 29; then
+        warn_skip_adb_pre11
+        break
+      fi
       adb_pair_connect_if_needed
       ;;
 
     adb-only)
       step_termux_base || baseline_bail
+      # Android 8-10: no Wireless debugging pairing flow (Android 11+ feature).
+      if sdk_le 29; then
+        warn_adb_only_pre11
+        return 0
+      fi
       adb_pair_connect_if_needed
       ;;
 
@@ -666,9 +720,17 @@ main() {
       step_termux_base || baseline_bail
       step_iiab_bootstrap_default
       install_iiab_android_cmd || true
-      if [[ "${ANDROID_SDK:-}" =~ ^[0-9]+$ ]] && (( ANDROID_SDK >= 34 )); then
+      if sdk_is_num && (( ANDROID_SDK >= 34 )); then
+        # Android 14+
         all_a14plus_optional_adb
+      elif sdk_eq 30; then
+        # Android 11
+        all_a11_optional_adb
+      elif sdk_le 29; then
+        # Android 8-10
+        warn_skip_adb_pre11
       else
+        # Android 12-13 (SDK 31-33): ADB + PPK still needed
         adb_pair_connect_if_needed
         attempt_auto_apply_ppk
         check_readiness || true
