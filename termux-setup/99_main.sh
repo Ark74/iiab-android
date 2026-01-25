@@ -585,7 +585,7 @@ warn_skip_adb_pre11() {
 
 warn_adb_only_pre11() {
   warn "Android 8-10: --adb-only cannot run Wireless debugging pairing (Android 11+ feature)."
-  warn "So far, our documentation indicates ADB is not required on Android 8-10."
+  warn "So far, our testing indicates ADB is not required on Android 8-10."
 }
 
 all_a11_optional_adb() {

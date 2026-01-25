@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # -----------------------------------------------------------------------------
-# GENERATED FILE: 2026-01-25T17:16:50-06:00 - do not edit directly.
+# GENERATED FILE: 2026-01-25T17:25:41-06:00 - do not edit directly.
 # Source modules: termux-setup/*.sh + manifest.sh
 # Rebuild: (cd termux-setup && bash build_bundle.sh)
 # -----------------------------------------------------------------------------
@@ -1825,7 +1825,7 @@ warn_skip_adb_pre11() {
 
 warn_adb_only_pre11() {
   warn "Android 8-10: --adb-only cannot run Wireless debugging pairing (Android 11+ feature)."
-  warn "So far, our documentation indicates ADB is not required on Android 8-10."
+  warn "So far, our testing indicates ADB is not required on Android 8-10."
 }
 
 all_a11_optional_adb() {
