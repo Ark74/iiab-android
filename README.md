@@ -18,15 +18,15 @@ http://localhost:8085/maps
 
 ## What are the current components of "IIAB on Android"?
 
-- **[termux-setup](https://github.com/iiab/iiab-android/tree/main/termux-setup) (iiab-termux)** — sets up a Debian-like environment on Android (it's called [PRoot](https://wiki.termux.com/wiki/PRoot))
-- **Wrapper to install IIAB (iiab-android)** — sets up [`local_vars_android.yml`](https://github.com/iiab/iiab/blob/master/vars/local_vars_android.yml), then launches IIAB's installer
-- **Core IIAB portability layer** — modifications across IIAB and its existing roles, based on [PR #4122](https://github.com/iiab/iiab/pull/4122)
-- **proot-distro service manager (PDSM)** — like systemd, but for `proot_services`
+* **[termux-setup](https://github.com/iiab/iiab-android/tree/main/termux-setup) (iiab-termux)** — sets up a Debian-like environment on Android (it's called [PRoot](https://wiki.termux.com/wiki/PRoot))
+* **Wrapper to install IIAB (iiab-android)** — sets up [`local_vars_android.yml`](https://github.com/iiab/iiab/blob/master/vars/local_vars_android.yml), then launches IIAB's installer
+* **Core IIAB portability layer** — modifications across IIAB and its existing roles, based on [PR #4122](https://github.com/iiab/iiab/pull/4122)
+* **proot-distro service manager (PDSM)** — like systemd, but for `proot_services`
 
 ## Related Docs
 
-- **Android bootstrap (in this repo):** [`termux-setup/README.md`](./termux-setup/README.md)
-- **proot_services role (in IIAB's main repo):** [`roles/proot_services/README.md`](https://github.com/iiab/iiab/blob/master/roles/proot_services/README.md)
+* **Android bootstrap (in this repo):** [`termux-setup/README.md`](./termux-setup/README.md)
+* **proot_services role (in IIAB's main repo):** [`roles/proot_services/README.md`](https://github.com/iiab/iiab/blob/master/roles/proot_services/README.md)
 
 ---
 
@@ -35,15 +35,15 @@ http://localhost:8085/maps
 1. Start with an Android 12-or-higher phone or tablet:
 
    * Install **F-Droid**. It will be our main source for required apps and app updates. As a bonus, there is no need to open an account.
-    - [https://f-droid.org/F-Droid.apk](https://f-droid.org/F-Droid.apk)
-    - * You will have to Allow installation from unknown sources (or Install unknown apps) from Chrome
+     * [https://f-droid.org/F-Droid.apk](https://f-droid.org/F-Droid.apk)
+     * You will have to Allow installation from unknown sources (or Install unknown apps) from Chrome
 
    * Update the **F-Droid repos**.
-     - Open the F-Droid app and click "Updates".
+     * Open the F-Droid app and click "Updates".
    * Search for **Termux** and install:
-     - **Termux** Terminal emulator with packages (com.termux)
-     - **Termux:API** Access Android functions from Termux (com.termux.api)
-     - * You will have to Allow installation from unknown sources (or Install unknown apps) from F-Droid
+     * **Termux** Terminal emulator with packages (com.termux)
+     * **Termux:API** Access Android functions from Termux (com.termux.api)
+     * You will have to Allow installation from unknown sources (or Install unknown apps) from F-Droid
 
    **Note**: You might see a "*This app was built for an older version of Android and cannot be updated automatically*" label on both apps. You can ignore this as it only refers for the [*auto-update* feature](https://f-droid.org/en/2024/02/01/twif.html). Manual updates will continue to work. [Read more here](https://github.com/termux/termux-packages/wiki/Termux-and-Android-10/3e8102ecd05c4954d67971ff2b508f32900265f7).
 
@@ -53,35 +53,37 @@ http://localhost:8085/maps
 
 3. Prepare the Termux environment. Android 12 and later versions have a feature called ["Phantom Process Killer" (PPK)](https://github.com/agnostic-apollo/Android-Docs/blob/master/en/docs/apps/processes/phantom-cached-and-empty-processes.md), which limits child processes. We need to disable this restriction to run IIAB successfully. In Android 12 and 13, you will disable PPK as part of the Termux environment set up as there is no UI option. For Android 14+, you can disable the restriction using Android Settings (see below). 
 
-   On all Android versions, run the following: 
+   On all Android versions, run the following:
+
    ```
    curl iiab.io/termux.txt | bash
    ```
+
    * In Android 12 and 13, make sure to opt in to the ADB Pair/Connect steps when prompted. You will be asked for 3 values: **Connect Port**, **Pair Port**, and **Pair Code**. Please check this (WIP) [video tutorial](https://ark.switnet.org/vid/termux_adb_pair_a16_hb.mp4) for a more interactive explanation. Once connected to ADB the `iiab-termux` script will handle the PPK workaround setup.
 
    * On Android 14 and later: Disable this restriction using Android Settings, in **Developer Options**:
 
-        * `Disable child process restrictions` (English), or
-        * `Desactivar restricciones de procesos secundarios` (Spanish)
+     * `Disable child process restrictions` (English), or
+     * `Desactivar restricciones de procesos secundarios` (Spanish)
 
-   * **Battery usage**:To run the IIAB on Android installer, or keep IIAB services running in the background (screen off), you must allow Termux to run without battery restrictions. Depending on your device and Android version, this setting may appear as one of the following:
+   * **Battery usage**: To run the IIAB on Android installer, or keep IIAB services running in the background (screen off), you must allow Termux to run without battery restrictions. Depending on your device and Android version, this setting may appear as one of the following:
 
      * Unrestricted
      * Not optimized / Don't optimize
      * Allow background activity/usage
 
-      The exact label varies by vendor and Android version. Make sure this is enabled for unattended, screen-off installs; otherwise Android may doze, pause, or even kill the process when screen turns off.
+     The exact label varies by vendor and Android version. Make sure this is enabled for unattended, screen-off installs; otherwise Android may doze, pause, or even kill the process when screen turns off.
 
-      Leaving this enabled is the most reliable way to keep the app and services running and ready. Please note that battery drain will increase, so it's best to keep a charger nearby.
+     Leaving this enabled is the most reliable way to keep the app and services running and ready. Please note that battery drain will increase, so it's best to keep a charger nearby.
 
 
-4. Enter [PRoot Distro](https://wiki.termux.com/wiki/PRoot)'s IIAB Debian environment to continue the installation:
+5. Enter [PRoot Distro](https://wiki.termux.com/wiki/PRoot)'s IIAB Debian environment to continue the installation:
 
-     ```
-     iiab-termux --login
-     ```
+   ```
+   iiab-termux --login
+   ```
 
-5. Run `iiab-android` which (a) installs `local_vars_android.yml` to [`/etc/iiab/local_vars.yml`](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?) and then (b) runs the IIAB installer:
+6. Run `iiab-android` which (a) installs `local_vars_android.yml` to [`/etc/iiab/local_vars.yml`](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?) and then (b) runs the IIAB installer:
 
    ```
    iiab-android
@@ -131,23 +133,23 @@ A copy of Wikipedia (in almost any language) can now be put on your Android phon
    EXPLANATION: Starting from Termux's high-level CLI (Command-Line Interface), you've "shelled into" [PRoot Distro](https://wiki.termux.com/wiki/PRoot)'s low-level IIAB Debian CLI:
 
    ```
-         +--------------------------------+
-         |  Android GUI (Apps, Settings)  |
-         +----------------+---------------+
-                          |
-                 open the | Termux app
-                          v
-         +----------------+---------------+
-         |      Termux (Android CLI)      |
-         | $ iiab-termux --login          |
-         +----------------+---------------+
-                          |
-         "shell into" the | low-level environment
-                          v
-      +-------------------+-------------------+
-      | proot-distro: IIAB Debian (userspace) |
-      | debian root# cd /opt/iiab/iiab        |
-      +---------------------------------------+
+          +----------------------------------+
+          |   Android GUI (Apps, Settings)   |
+          +-----------------+----------------+
+                            |
+                   open the | Termux app
+                            v
+              +-------------+------------+
+              |   Termux (Android CLI)   |
+              | $ iiab-termux --login    |
+              +-------------+------------+
+                            |
+           "shell into" the | low-level environment
+                            v
+      +---------------------+---------------------+
+      |   proot-distro: IIAB Debian (userspace)   |
+      | debian root# cd /opt/iiab/iiab            |
+      +-------------------------------------------+
    ```
 
 4. Enter the folder where IIAB stores ZIM files:
@@ -236,8 +238,6 @@ If you want to remove the IIAB installation and all associated apps, follow thes
 
    **Note:** All content in that IIAB installation will be deleted when executing this command. Back up your content first if you plan to reinstall later.
 
-2. Remove / uninstall the Termux app.
+2. Uninstall both apps, Termux and Termux-API, if you no longer need them.
 
-3. If applicable, remove / uninstall the Shizuku app (Android 12–13).
-
-4. Disable Developer Options.
+3. Disable Developer Options.
