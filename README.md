@@ -25,14 +25,14 @@ http://localhost:8085/maps
 
 ## Related Docs
 
-* **Android bootstrap (in this repo):** [`termux-setup/README.md`](./termux-setup/README.md)
+* **Android bootstrap (in this repo):** [`termux-setup/README.md`](https://github.com/iiab/iiab-android/blob/main/termux-setup/README.md)
 * **proot_services role (in IIAB's main repo):** [`roles/proot_services/README.md`](https://github.com/iiab/iiab/blob/master/roles/proot_services/README.md)
 
 ---
 
 ## :clipboard: Installation guide
 
-1. Start with an Android 12-or-higher phone or tablet:
+1. Start with an Android 9-or-higher phone or tablet:
 
    * Install **F-Droid**. It will be our main source for required apps and app updates. As a bonus, there is no need to open an account.
      * [https://f-droid.org/F-Droid.apk](https://f-droid.org/F-Droid.apk)
@@ -63,8 +63,7 @@ http://localhost:8085/maps
 
    * On Android 14 and later: Disable this restriction using Android Settings, in **Developer Options**:
 
-     * `Disable child process restrictions` (English), or
-     * `Desactivar restricciones de procesos secundarios` (Spanish)
+     * `Disable child process restrictions`
 
    * **Battery usage**: To run the IIAB on Android installer, or keep IIAB services running in the background (screen off), you must allow Termux to run without battery restrictions. Depending on your device and Android version, this setting may appear as one of the following:
 
