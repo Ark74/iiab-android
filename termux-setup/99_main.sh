@@ -620,6 +620,14 @@ validate_args() {
     norm="$(normalize_port_5digits "$raw" 2>/dev/null)" || \
       die "Invalid --connect-port (must be 5 digits PORT or IP:PORT): '$raw'"
     CONNECT_PORT="$norm"
+    # Android 8-10 (SDK <=29): Wireless debugging pairing isn't available.
+    # If user provided --connect-port, make it explicit it's ignored here.
+    if sdk_le 29; then
+      warn "Android 8-10: ignoring --connect-port (ADB wireless pairing/connect is not available)."
+      CONNECT_PORT=""
+      CONNECT_PORT_FROM=""
+      return 0
+    fi
     case "$MODE" in
       adb-only|with-adb|connect-only|ppk-only|check|all) : ;;
       baseline)
