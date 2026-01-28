@@ -95,7 +95,7 @@ http://localhost:8085/maps
 
 ## Test your IIAB install
 
-IIAB [`pdsm` services](https://github.com/iiab/iiab/tree/master/roles/proot_se) start automatically after installation. To check that your IIAB Apps are working (using a browser on your Android device) by visiting these URLs:
+IIAB [`pdsm` services](https://github.com/iiab/iiab/tree/master/roles/proot_services) start automatically after installation. To check that your IIAB Apps are working (using a browser on your Android device) by visiting these URLs:
 
 | App                    | URL                                                            |
 |------------------------|----------------------------------------------------------------|
