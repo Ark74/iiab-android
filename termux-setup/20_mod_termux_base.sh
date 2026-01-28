@@ -1,15 +1,40 @@
 # shellcheck shell=bash
 # Module file (no shebang). Bundled by build_bundle.sh
 
+# -------------------------
+# Prepare Python mDNS deps - zeroconf
+# -------------------------
+# Rationale: If mDNS autodetect is enabled, prepare it here so it's available from the start.
+termux_prepare_mdns_deps() {
+  # Only if mDNS autodetect is enabled & pip-install is allowed.
+  [[ "${ADB_MDNS:-1}" -eq 1 ]] || return 0
+  [[ "${ADB_MDNS_PIP_INSTALL:-1}" -eq 1 ]] || return 0
+  have python || have python3 || return 0
+
+  # Functions live in 50_mod_adb.sh; safe to call at runtime.
+  if python_has_zeroconf; then
+    ok "mDNS autodetect dependency already present (python: zeroconf)."
+    return 0
+  fi
+
+  log "Preparing mDNS autodetect dependency (python module: zeroconf)..."
+  if python_pip_install_zeroconf && python_has_zeroconf; then
+    ok "mDNS autodetect dependency ready (zeroconf)."
+  else
+    warn "Could not prepare 'zeroconf' during baseline. mDNS autodetect may fall back to manual prompts."
+  fi
+  return 0
+}
+
 # If baseline fails, store the last command that failed for better diagnostics.
 BASELINE_ERR=""
 
 baseline_prereqs_ok() {
-  have proot-distro && have adb && have termux-notification && have termux-dialog && have sha256sum
+  have proot-distro && have adb && have termux-notification && have termux-dialog && have sha256sum && have python
 }
 
 baseline_missing_prereqs() {
-  for b in adb proot-distro termux-notification termux-dialog; do
+  for b in adb proot-distro termux-notification termux-dialog python; do
     have "$b" || echo "$b"
   done
   have sha256sum || echo "sha256sum (coreutils)"
@@ -78,6 +103,13 @@ android_start_activity() {
   local ambin
   ambin="$(android_am_bin 2>/dev/null)" || return 1
   "$ambin" start "$@" >/dev/null 2>&1
+}
+
+android_open_developer_options() {
+  # Open Developer options to enable Wireless debugging.
+  android_start_activity -a android.settings.APPLICATION_DEVELOPMENT_SETTINGS && return 0
+  android_start_activity -a android.settings.DEVELOPMENT_SETTINGS && return 0
+  return 1
 }
 
 android_open_termux_app_info() {
@@ -204,6 +236,8 @@ step_termux_base() {
     if baseline_prereqs_ok; then
       BASELINE_OK=1
       ok "Termux baseline already prepared (stamp found)."
+      # Ensure optional mDNS deps are ready from the start (does not affect stamp).
+      termux_prepare_mdns_deps || true
       return 0
     fi
     warn "Baseline stamp found but prerequisites are missing; forcing reinstall."
@@ -233,6 +267,7 @@ step_termux_base() {
     gawk \
     grep \
     openssh \
+    python \
     proot \
     proot-distro \
     sed \
@@ -247,6 +282,8 @@ step_termux_base() {
   if baseline_prereqs_ok; then
     BASELINE_OK=1
     ok "Termux baseline ready."
+    # Prepare Python zeroconf *now* if mDNS autodetect is enabled.
+    termux_prepare_mdns_deps || true
     date > "$stamp"
     return 0
   fi

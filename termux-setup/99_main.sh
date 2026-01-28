@@ -77,8 +77,8 @@ Notes:
 - ADB prompts require: `pkg install termux-api` + Termux:API app installed + notification permission.
 - Wireless debugging must be enabled on Android 12 & 13
 - Wireless debugging (pairing code / QR) is available on Android 11 and later versions.
-- Android 8-10: there is no Wireless debugging pairing flow. ADB-over-network typically requires
-  a one-time USB setup from another host (e.g. `adb tcpip 5555`), so iiab-termux skips ADB there.
+- Android 8-10: there is no Wireless debugging pairing flow. 
+- CONNECT PORT and PAIR PORT are auto-detected via mDNS when possible; still prompting for the PAIR CODE.
 EOF
 }
 
