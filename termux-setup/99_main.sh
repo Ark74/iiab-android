@@ -120,7 +120,6 @@ guard_no_iiab_termux_in_proot() {
 
 guard_no_iiab_termux_in_proot
 
-
 # -------------------------
 # Self-check
 # -------------------------
@@ -559,18 +558,17 @@ all_a14plus_optional_adb() {
     fi
   fi
 
-  # Not connected -> ask whether to skip ADB flows
-  if tty_yesno_default_y "[iiab] Android 14+: Skip ADB pairing/connect steps? [Y/n]: "; then
-    warn "Skipping ADB steps (Android 14+)."
-    warn "Reminder: enable Developer Options -> 'Disable child process restrictions' (otherwise installs may fail)."
-    CHECK_NO_ADB=1
-    CHECK_SDK="${ANDROID_SDK:-}"
+  # Not connected -> offer ADB (recommended)
+  if tty_yesno_default_y "[iiab] Android 14+: Connect via Wireless ADB now (recommended)? [Y/n]: "; then
+    adb_pair_connect_if_needed
+    check_readiness || true
     return 0
   fi
 
-  # User wants ADB even on A14+: proceed
-  adb_pair_connect_if_needed
-  check_readiness || true
+  warn "Continuing without ADB (Android 14+)."
+  warn "Reminder: enable Developer Options -> 'Disable child process restrictions' (otherwise installs may fail)."
+  CHECK_NO_ADB=1
+  CHECK_SDK="${ANDROID_SDK:-}"
   return 0
 }
 
@@ -600,17 +598,17 @@ all_a11_optional_adb() {
     fi
   fi
 
-  # Not connected -> allow skip (same as A14+ optional ADB)
-  if tty_yesno_default_y "[iiab] Android 11: Skip ADB pairing/connect steps? [Y/n]: "; then
-    warn "Skipping ADB steps (Android 11)."
-    warn "Note: Wireless debugging is optional here; installs usually work without ADB."
-    CHECK_NO_ADB=1
-    CHECK_SDK="${ANDROID_SDK:-}"
+  # Not connected -> offer ADB (recommended, but optional)
+  if tty_yesno_default_y "[iiab] Android 11: Connect via Wireless ADB now (recommended)? [Y/n]: "; then
+    adb_pair_connect_if_needed
+    check_readiness || true
     return 0
   fi
 
-  adb_pair_connect_if_needed
-  check_readiness || true
+  warn "Continuing without ADB (Android 11)."
+  warn "Note: Wireless debugging is optional here; installs usually work without ADB."
+  CHECK_NO_ADB=1
+  CHECK_SDK="${ANDROID_SDK:-}"
   return 0
 }
 
