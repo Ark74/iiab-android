@@ -44,7 +44,7 @@ python_ensure_zeroconf() {
   python_has_zeroconf && return 0
   [[ "${ADB_MDNS_PIP_INSTALL:-1}" -eq 1 ]] || return 1
 
-  warn "Python module 'zeroconf' not found. Trying to install it: python -m pip install --user zeroconf"
+  warn "Python module 'zeroconf' not found. Trying to install it: python -m pip install --upgrade zeroconf"
   if python_pip_install_zeroconf && python_has_zeroconf; then
     ok "Installed Python module 'zeroconf' (mDNS autodetect enabled)."
     return 0
