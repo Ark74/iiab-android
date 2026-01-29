@@ -25,10 +25,10 @@ python_pip_install_zeroconf() {
   [[ -n "$py" ]] || return 1
   # Some environments may lack pip initially; try ensurepip if available.
   if ! "$py" -m pip --version >/dev/null 2>&1; then
-    "$py" -m ensurepip --upgrade >/dev/null 2>&1 || return 1
-    "$py" -m pip --version >/dev/null 2>&1 || return 1
+    "$py" -m ensurepip --upgrade || return 1
+    "$py" -m pip --version || return 1
   fi
-  "$py" -m pip install --user --disable-pip-version-check --no-input -q --no-cache-dir zeroconf >/dev/null 2>&1
+    "$py" -m pip install --upgrade zeroconf --progress-bar on
 }
 
 python_ensure_zeroconf() {
@@ -198,15 +198,19 @@ power_mode_battery_instructions() {
   local fd=1
   if { : >&3; } 2>/dev/null; then fd=3; fi
   {
-    # Print header in blue + bold
+    # Print header in yellow. + bold
     printf '%b' "${YEL}${BOLD}"
     cat <<'EOF'
 [iiab] Power-mode needs one manual Android setting:
 EOF
 
     # Print body in blue
-    printf '%b' "${BLU}"
+    printf '%b' "${RST}"
+    printf '%b' "${BOLD}"
     cat <<'EOF'
+
+Some devices let Termux set "Battery usage" correctly by default, but not all do; please double-check:
+
  Settings -> Apps -> Termux -> Battery
    - Set: Unrestricted
      - or: Don't optimize / No restrictions
@@ -232,7 +236,7 @@ power_mode_offer_battery_settings_once() {
 
   power_mode_battery_instructions
 
-  if tty_yesno_default_y "${YEL}[iiab] Open Termux App info to adjust Battery policy?${RST} [Y/n]: "; then
+  if tty_yesno_default_y "${YEL}[iiab] Open Termux App info to adjust Battery policy? [Y/n]: ${RST}"; then
     if android_open_termux_app_info; then
       printf "[iiab] When done, return to Termux and press Enter to continue... " >&3
       if [[ -r /dev/tty ]]; then
