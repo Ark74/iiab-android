@@ -28,7 +28,12 @@ python_pip_install_zeroconf() {
     "$py" -m ensurepip --upgrade || return 1
     "$py" -m pip --version || return 1
   fi
+  # Run pip directly on the real TTY when FD 3/4 are available.
+  if : >&3 2>/dev/null && : >&4 2>/dev/null; then
+    ( exec 1>&3 2>&4; "$py" -m pip install --upgrade zeroconf --progress-bar on )
+  else
     "$py" -m pip install --upgrade zeroconf --progress-bar on
+  fi
 }
 
 python_ensure_zeroconf() {
