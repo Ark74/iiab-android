@@ -11,50 +11,12 @@ ADB_PAIRED_STAMP="${ADB_STATE_DIR}/stamp.adb_paired"
 # -------------------------
 # mDNS / Zeroconf autodiscovery (Wireless debugging ports)
 # -------------------------
-# Best-effort: if it fails, we fall back to Termux:API prompts.
-ADB_MDNS="${ADB_MDNS:-1}"                          # 1=enable autodetect, 0=disable
-ADB_MDNS_PIP_INSTALL="${ADB_MDNS_PIP_INSTALL:-1}"  # 1=try pip install zeroconf if missing
+# Defaults + python/zeroconf helpers are defined in 20_mod_termux_base.sh.
 ADB_MDNS_WAIT_SECS="${ADB_MDNS_WAIT_SECS:-90}"
 # If ports were discovered via mDNS, use a shorter/relaxed timeout for the PAIR CODE prompt
 ADB_CODE_TIMEOUT_SECS="${ADB_CODE_TIMEOUT_SECS:-90}"
 # Notification ID for the "open wireless debugging" hint (separate from ask/reply notifications)
 ADB_HINT_NOTIF_ID="${ADB_HINT_NOTIF_ID:-$((NOTIF_BASE_ID + 30))}"
-
-python_has_zeroconf() {
-  local py=""
-  py="$(command -v python 2>/dev/null || command -v python3 2>/dev/null || true)"
-  [[ -n "$py" ]] || return 1
-  "$py" -c 'import zeroconf' >/dev/null 2>&1
-}
-
-python_pip_install_zeroconf() {
-  local py=""
-  py="$(command -v python 2>/dev/null || command -v python3 2>/dev/null || true)"
-  [[ -n "$py" ]] || return 1
-  # Some environments may lack pip initially; try ensurepip if available.
-  if ! "$py" -m pip --version >/dev/null 2>&1; then
-    "$py" -m ensurepip --upgrade >/dev/null 2>&1 || return 1
-    "$py" -m pip --version >/dev/null 2>&1 || return 1
-  fi
-  # User site-packages; do not fail the whole script if network/pip fails.
-  "$py" -m pip install --user --disable-pip-version-check --no-input -q --no-cache-dir zeroconf >/dev/null 2>&1
-}
-
-python_ensure_zeroconf() {
-  python_has_zeroconf && return 0
-  [[ "${ADB_MDNS_PIP_INSTALL:-1}" -eq 1 ]] || return 1
-
-  warn "Python module 'zeroconf' not found. Trying to install it (best effort): python -m pip install --user zeroconf"
-  if python_pip_install_zeroconf; then
-    if python_has_zeroconf; then
-      ok "Installed Python module 'zeroconf' (mDNS autodetect enabled)."
-      return 0
-    fi
-  fi
-
-  warn "Could not install 'zeroconf' (no network, pip missing, or install failed). Falling back to manual prompts."
-  return 1
-}
 
 adb_local_ipv4s_csv() {
   # Used to reduce the chance of picking another device on the LAN.
@@ -86,9 +48,9 @@ adb_hint_notif_remove() {
 
 adb_prepare_wireless_debugging_ui() {
   # Best-effort: bring user close to Wireless debugging before starting the mDNS timer.
-  warn "Opening Developer options (best effort). Please enable Wireless debugging, then choose 'Pair device with pairing code'."
+  warn "Opening Developer options. Please enable Wireless debugging, then choose 'Pair device with pairing code'."
   if android_open_developer_options; then
-    ok "Developer options opened (best effort)."
+    ok "Developer options opened."
   else
     warn "Could not open Developer options automatically. Open manually: Settings -> System -> Developer options."
   fi
@@ -332,7 +294,7 @@ adb_pair_connect() {
   else
     # mDNS window (90s): open Developer options, scan for both connect+pair ports.
     local ports="" pair_port="" auto_ports=0
-    if [[ "${ADB_MDNS:-1}" -eq 1 ]]; then
+    if [[ "${ADB_MDNS:-0}" -eq 1 ]] && [[ "${ANDROID_SDK:-}" =~ ^[0-9]+$ ]] && (( ANDROID_SDK >= 30 )); then
       if python_ensure_zeroconf; then
         adb_prepare_wireless_debugging_ui
         if ports="$(adb_mdns_autodetect_pair_and_connect_ports 2>/dev/null)"; then

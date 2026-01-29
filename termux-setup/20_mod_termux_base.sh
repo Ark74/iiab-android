@@ -2,24 +2,75 @@
 # Module file (no shebang). Bundled by build_bundle.sh
 
 # -------------------------
-# Prepare Python mDNS deps - zeroconf
+# Python helpers + mDNS deps (zeroconf)
 # -------------------------
 # Rationale: If mDNS autodetect is enabled, prepare it here so it's available from the start.
+
+TERMUX_ZEROCONF_STAMP="${STATE_DIR}/stamp.termux_zeroconf"
+
+python_cmd() {
+  command -v python 2>/dev/null || command -v python3 2>/dev/null || true
+}
+
+python_has_zeroconf() {
+  local py=""
+  py="$(python_cmd)"
+  [[ -n "$py" ]] || return 1
+  "$py" -c 'import zeroconf' >/dev/null 2>&1
+}
+
+python_pip_install_zeroconf() {
+  local py=""
+  py="$(python_cmd)"
+  [[ -n "$py" ]] || return 1
+  # Some environments may lack pip initially; try ensurepip if available.
+  if ! "$py" -m pip --version >/dev/null 2>&1; then
+    "$py" -m ensurepip --upgrade >/dev/null 2>&1 || return 1
+    "$py" -m pip --version >/dev/null 2>&1 || return 1
+  fi
+  "$py" -m pip install --user --disable-pip-version-check --no-input -q --no-cache-dir zeroconf >/dev/null 2>&1
+}
+
+python_ensure_zeroconf() {
+  # Android < 11 does not use Wireless debugging pairing; skip mDNS prep.
+  if [[ "${ANDROID_SDK:-}" =~ ^[0-9]+$ ]] && (( ANDROID_SDK < 30 )); then
+    return 1
+  fi
+  python_has_zeroconf && return 0
+  [[ "${ADB_MDNS_PIP_INSTALL:-1}" -eq 1 ]] || return 1
+
+  warn "Python module 'zeroconf' not found. Trying to install it: python -m pip install --user zeroconf"
+  if python_pip_install_zeroconf && python_has_zeroconf; then
+    ok "Installed Python module 'zeroconf' (mDNS autodetect enabled)."
+    return 0
+  fi
+  warn "Could not install 'zeroconf' (no network, pip missing, or install failed). Falling back to manual prompts."
+  return 1
+}
+
 termux_prepare_mdns_deps() {
   # Only if mDNS autodetect is enabled & pip-install is allowed.
-  [[ "${ADB_MDNS:-1}" -eq 1 ]] || return 0
+  [[ "${ADB_MDNS:-0}" -eq 1 ]] || return 0
   [[ "${ADB_MDNS_PIP_INSTALL:-1}" -eq 1 ]] || return 0
   have python || have python3 || return 0
 
-  # Functions live in 50_mod_adb.sh; safe to call at runtime.
+  # If we stamped success before and it's still present, do nothing.
+  if [[ -f "$TERMUX_ZEROCONF_STAMP" ]] && python_has_zeroconf; then
+    ok "mDNS autodetect dependency already present (python: zeroconf)."
+    return 0
+  fi
+  # If stamp exists but module disappeared, drop stamp and retry.
+  [[ -f "$TERMUX_ZEROCONF_STAMP" ]] && rm -f "$TERMUX_ZEROCONF_STAMP" >/dev/null 2>&1 || true
   if python_has_zeroconf; then
     ok "mDNS autodetect dependency already present (python: zeroconf)."
+    date > "$TERMUX_ZEROCONF_STAMP" 2>/dev/null || true
     return 0
   fi
 
   log "Preparing mDNS autodetect dependency (python module: zeroconf)..."
   if python_pip_install_zeroconf && python_has_zeroconf; then
     ok "mDNS autodetect dependency ready (zeroconf)."
+    date > "$TERMUX_ZEROCONF_STAMP" 2>/dev/null || true
   else
     warn "Could not prepare 'zeroconf' during baseline. mDNS autodetect may fall back to manual prompts."
   fi
@@ -29,12 +80,23 @@ termux_prepare_mdns_deps() {
 # If baseline fails, store the last command that failed for better diagnostics.
 BASELINE_ERR=""
 
+baseline_need_python() {
+  # Android 11+ (SDK 30+) only
+  [[ "${ANDROID_SDK:-}" =~ ^[0-9]+$ ]] && (( ANDROID_SDK >= 30 ))
+}
+
 baseline_prereqs_ok() {
-  have proot-distro && have adb && have termux-notification && have termux-dialog && have sha256sum && have python
+  have proot-distro && have adb && have termux-notification && have termux-dialog && have sha256sum || return 1
+  if baseline_need_python; then
+    have python || return 1
+  fi
+  return 0
 }
 
 baseline_missing_prereqs() {
-  for b in adb proot-distro termux-notification termux-dialog python; do
+  local req=(adb proot-distro termux-notification termux-dialog)
+  baseline_need_python && req+=(python)
+  for b in "${req[@]}"; do
     have "$b" || echo "$b"
   done
   have sha256sum || echo "sha256sum (coreutils)"
@@ -60,6 +122,16 @@ get_android_sdk()     { getprop ro.build.version.sdk 2>/dev/null || true; }
 get_android_release() { getprop ro.build.version.release 2>/dev/null || true; }
 ANDROID_SDK="$(get_android_sdk)"
 ANDROID_REL="$(get_android_release)"
+
+# Default: enable mDNS autodetect only on Android 11+ (SDK 30+).
+if [[ -z "${ADB_MDNS+x}" ]]; then
+  if [[ "${ANDROID_SDK:-}" =~ ^[0-9]+$ ]] && (( ANDROID_SDK >= 30 )); then
+    ADB_MDNS=1
+  else
+    ADB_MDNS=0
+  fi
+fi
+ADB_MDNS_PIP_INSTALL="${ADB_MDNS_PIP_INSTALL:-1}"
 
 # -------------------------
 # Wakelock (Termux:API)
@@ -259,21 +331,23 @@ step_termux_base() {
     return 1
   fi
 
-  if ! termux_apt install \
-    android-tools \
-    ca-certificates \
-    coreutils \
-    curl \
-    gawk \
-    grep \
-    openssh \
-    python \
-    proot \
-    proot-distro \
-    sed \
-    termux-api \
+  local pkgs=(
+    android-tools
+    ca-certificates
+    coreutils
+    curl
+    gawk
+    grep
+    openssh
+    proot
+    proot-distro
+    sed
+    termux-api
     which
-  then
+  )
+  baseline_need_python && pkgs+=(python)
+
+  if ! termux_apt install "${pkgs[@]}"; then
     BASELINE_ERR="termux_apt install (baseline deps)"
     baseline_bail_details
     return 1
@@ -291,4 +365,22 @@ step_termux_base() {
   BASELINE_ERR="post-install check (commands missing after install)"
   baseline_bail_details
   return 1
+}
+
+# -------------------------
+# Python + zeroconf prep (Android 11+)
+# -------------------------
+TERMUX_ZEROCONF_STAMP="${STATE_DIR}/stamp.termux_zeroconf"
+
+step_termux_python_zeroconf() {
+  baseline_need_python || return 0
+  [[ -f "$TERMUX_ZEROCONF_STAMP" ]] && return 0
+
+  if ! have python; then
+    warn "Android 11+: python is expected but missing; skipping zeroconf prep."
+    return 0
+  fi
+
+  termux_prepare_mdns_deps
+  python_has_zeroconf && date > "$TERMUX_ZEROCONF_STAMP" 2>/dev/null || true
 }
