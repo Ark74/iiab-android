@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # -----------------------------------------------------------------------------
-# GENERATED FILE: 2026-01-29T04:37:45-06:00 - do not edit directly.
+# GENERATED FILE: 2026-01-29T05:05:58-06:00 - do not edit directly.
 # Source modules: termux-setup/*.sh + manifest.sh
 # Rebuild: (cd termux-setup && bash build_bundle.sh)
 # -----------------------------------------------------------------------------
@@ -346,6 +346,8 @@ android_open_battery_optimization_list() {
 }
 
 power_mode_battery_instructions() {
+  local fd=1
+  if { : >&3; } 2>/dev/null; then fd=3; fi
   {
     # Print header in blue + bold
     printf '%b' "${YEL}${BOLD}"
@@ -369,7 +371,7 @@ EOF
 
     # Reset colors
     printf '%b' "${RST}"
-  } >&3
+  } >&"$fd"
 }
 
 power_mode_offer_battery_settings_once() {
@@ -521,8 +523,6 @@ step_termux_base() {
 # -------------------------
 # Python + zeroconf prep (Android 11+)
 # -------------------------
-TERMUX_ZEROCONF_STAMP="${STATE_DIR}/stamp.termux_zeroconf"
-
 step_termux_python_zeroconf() {
   baseline_need_python || return 0
   [[ -f "$TERMUX_ZEROCONF_STAMP" ]] && return 0
@@ -1665,7 +1665,7 @@ Notes:
 EOF
 }
 
-trap 'power_mode_login_exit >/dev/null 2>&1 || true; cleanup_notif >/dev/null 2>&1 || true; release_wakelock >/dev/null 2>&1 || true' EXIT INT TERM
+trap 'power_mode_login_exit >/dev/null 2>&1 || true; adb_hint_notif_remove >/dev/null 2>&1 || true; cleanup_notif >/dev/null 2>&1 || true; release_wakelock >/dev/null 2>&1 || true' EXIT INT TERM
 
 # NOTE: Termux:API prompts live in 40_mod_termux_api.sh
 

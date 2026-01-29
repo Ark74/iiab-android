@@ -195,6 +195,8 @@ android_open_battery_optimization_list() {
 }
 
 power_mode_battery_instructions() {
+  local fd=1
+  if { : >&3; } 2>/dev/null; then fd=3; fi
   {
     # Print header in blue + bold
     printf '%b' "${YEL}${BOLD}"
@@ -218,7 +220,7 @@ EOF
 
     # Reset colors
     printf '%b' "${RST}"
-  } >&3
+  } >&"$fd"
 }
 
 power_mode_offer_battery_settings_once() {
@@ -370,8 +372,6 @@ step_termux_base() {
 # -------------------------
 # Python + zeroconf prep (Android 11+)
 # -------------------------
-TERMUX_ZEROCONF_STAMP="${STATE_DIR}/stamp.termux_zeroconf"
-
 step_termux_python_zeroconf() {
   baseline_need_python || return 0
   [[ -f "$TERMUX_ZEROCONF_STAMP" ]] && return 0

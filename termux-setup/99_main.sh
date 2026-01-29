@@ -82,7 +82,7 @@ Notes:
 EOF
 }
 
-trap 'power_mode_login_exit >/dev/null 2>&1 || true; cleanup_notif >/dev/null 2>&1 || true; release_wakelock >/dev/null 2>&1 || true' EXIT INT TERM
+trap 'power_mode_login_exit >/dev/null 2>&1 || true; adb_hint_notif_remove >/dev/null 2>&1 || true; cleanup_notif >/dev/null 2>&1 || true; release_wakelock >/dev/null 2>&1 || true' EXIT INT TERM
 
 # NOTE: Termux:API prompts live in 40_mod_termux_api.sh
 
