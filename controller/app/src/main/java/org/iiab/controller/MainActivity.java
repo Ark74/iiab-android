@@ -853,7 +853,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             try {
                 // Check update JSON data
                 Log.d(TAG, "OTA: Connecting to https://iiab.switnet.org/android/apk/update.json");
-                URL url = new URL("https://iiab.switnet.org/android/apk/update.json"); // Adjust this to your exact JSON URL
+                URL url = new URL("https://iiab.switnet.org/android/apk/update.json");
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                 conn.setConnectTimeout(5000);
                 conn.setRequestMethod("GET");
