@@ -73,6 +73,7 @@ public class AdbPairingReceiver extends BroadcastReceiver {
 
                     // Start the CPU Stream from the Singleton
                     adbManager.startCpuMonitor(context);
+                    adbManager.checkSystemRestrictions(context);
 
                 } else {
                     Log.e(TAG, "Native pairing failed (Incorrect PIN).");

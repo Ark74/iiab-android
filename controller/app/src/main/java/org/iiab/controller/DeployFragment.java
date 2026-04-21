@@ -29,8 +29,10 @@ import android.content.IntentFilter;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.RemoteInput;
+
 import com.github.mikephil.charting.components.XAxis;
 import com.github.mikephil.charting.components.YAxis;
 import com.github.mikephil.charting.data.Entry;
@@ -62,7 +64,8 @@ public class DeployFragment extends Fragment {
     private View ledDevMode;
     private View ledDcpr;
     private View ledPpk;
-
+    private TextView txtDcpr;
+    private TextView txtPpk;
     private LinearLayout rolesContainer;
     private LinearLayout discrepancyWarning;
     private Button btnLaunchInstall;
@@ -113,11 +116,73 @@ public class DeployFragment extends Fragment {
             if ("org.iiab.controller.ADB_PAIRING_SENT".equals(action)) {
                 btnAdbAction.setText("Connected!");
                 isConnectedToAdb = true;
-                new Handler(Looper.getMainLooper()).postDelayed(() -> { if (isAdded()) updateUiState(true); }, 500);
+                new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                    if (isAdded()) updateUiState(true);
+                }, 500);
             } else if ("org.iiab.controller.ADB_CPU_UPDATE".equals(action)) {
                 String cpuData = intent.getStringExtra("cpu_line");
                 if (isAdded() && isConnectedToAdb && cpuData != null) {
-                    addCpuEntry(parseCpuUsage(cpuData));
+                    float cpuVal = parseCpuUsage(cpuData);
+                    if (cpuVal >= 0f) {
+                        addCpuEntry(cpuVal);
+                    }
+                }
+            } else if ("org.iiab.controller.ADB_RESTRICTIONS_UPDATE".equals(action)) {
+                if (!isAdded()) return;
+
+                String cpValue = intent.getStringExtra("child_process_value");
+                String rawPpkValue = intent.getStringExtra("ppk_value");
+
+                String ppkDisplay = ("null".equals(rawPpkValue) || "unknown".equals(rawPpkValue)) ? getString(R.string.adb_ppk_default) : rawPpkValue;
+
+                // Reset tints and set base grey background
+                ledDcpr.setBackgroundTintList(null);
+                ledPpk.setBackgroundTintList(null);
+                ledPpk.setBackgroundResource(R.drawable.led_off);
+                ledDcpr.setBackgroundResource(R.drawable.led_off);
+
+                if (android.os.Build.VERSION.SDK_INT >= 34) {
+                    // ==========================================
+                    // --- ANDROID 14+ LOGIC ---
+                    // ==========================================
+                    txtPpk.setText(android.text.Html.fromHtml(getString(R.string.adb_ppk_limit_not_required, ppkDisplay), android.text.Html.FROM_HTML_MODE_COMPACT));
+
+                    // PPK Color Logic (A14+)
+                    if ("256".equals(rawPpkValue) || "512".equals(rawPpkValue) || "1024".equals(rawPpkValue)) {
+                        ledPpk.setBackgroundResource(R.drawable.led_on_green); // GREEN (Fixed manually)
+                    } else if ("error".equals(rawPpkValue) || rawPpkValue == null || rawPpkValue.isEmpty()) {
+                        ledPpk.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#FFC107"))); // YELLOW (Timeout/Error)
+                    } else {
+                        ledPpk.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#2196F3"))); // BLUE (Queried, default value, not critical here)
+                    }
+
+                    // Child Process Color Logic (A14+)
+                    if ("0".equals(cpValue) || "false".equals(cpValue)) {
+                        ledDcpr.setBackgroundResource(R.drawable.led_on_green);
+                        txtDcpr.setText(android.text.Html.fromHtml(getString(R.string.adb_cp_disabled_ok), android.text.Html.FROM_HTML_MODE_COMPACT));
+                    } else if ("1".equals(cpValue) || "true".equals(cpValue) || "null".equals(cpValue) || cpValue == null) {
+                        ledDcpr.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#F44336"))); // RED (Limiting)
+                        txtDcpr.setText(android.text.Html.fromHtml(getString(R.string.adb_cp_enabled_limiting), android.text.Html.FROM_HTML_MODE_COMPACT));
+                    } else {
+                        txtDcpr.setText(android.text.Html.fromHtml(getString(R.string.adb_cp_unknown), android.text.Html.FROM_HTML_MODE_COMPACT));
+                    }
+
+                } else if (android.os.Build.VERSION.SDK_INT >= 31) {
+                    // ==========================================
+                    // --- ANDROID 12 & 13 LOGIC ---
+                    // ==========================================
+                    txtDcpr.setText(android.text.Html.fromHtml(getString(R.string.adb_cp_not_required), android.text.Html.FROM_HTML_MODE_COMPACT));
+
+                    txtPpk.setText(android.text.Html.fromHtml(getString(R.string.adb_ppk_limit_active, ppkDisplay), android.text.Html.FROM_HTML_MODE_COMPACT));
+
+                    // PPK Color Logic (A12/13)
+                    if ("256".equals(rawPpkValue) || "512".equals(rawPpkValue) || "1024".equals(rawPpkValue)) {
+                        ledPpk.setBackgroundResource(R.drawable.led_on_green); // GREEN (Fixed manually)
+                    } else if ("error".equals(rawPpkValue) || rawPpkValue == null || rawPpkValue.isEmpty()) {
+                        ledPpk.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#F44336"))); // RED (Timeout/Error - Critical here)
+                    } else {
+                        ledPpk.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#FFC107"))); // YELLOW (Queried, default value, needs attention)
+                    }
                 }
             }
         }
@@ -133,11 +198,13 @@ public class DeployFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // Link Dashboard LEDs
+        // 1. SINGLE VIEW INITIALIZATION
         ledTermux = view.findViewById(R.id.led_install_termux);
         ledDevMode = view.findViewById(R.id.led_install_dev_mode);
         ledDcpr = view.findViewById(R.id.led_install_dcpr);
         ledPpk = view.findViewById(R.id.led_install_ppk);
+        txtDcpr = view.findViewById(R.id.txt_install_dcpr);
+        txtPpk = view.findViewById(R.id.txt_install_ppk);
 
         btnAdbAction = view.findViewById(R.id.btn_adb_action);
         ledAdbStatus = view.findViewById(R.id.led_adb_status);
@@ -145,19 +212,47 @@ public class DeployFragment extends Fragment {
         cpuChart = view.findViewById(R.id.cpu_chart);
         nsdManager = (android.net.nsd.NsdManager) requireContext().getSystemService(Context.NSD_SERVICE);
 
-        // Activate the collapsible menu
-        TextView txtAdvMonitoringTitle = view.findViewById(R.id.txt_adv_monitoring_title);
-        LinearLayout containerAdvMonitoring = view.findViewById(R.id.container_adv_monitoring);
-        setupSingleMenu(txtAdvMonitoringTitle, containerAdvMonitoring, R.string.install_adv_monitoring_title);
+        // 2. VERSION LOGIC (Hide on Android 10-)
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) {
+            view.findViewById(R.id.section_adv_monitoring).setVisibility(View.GONE);
+            view.findViewById(R.id.container_led_dcpr).setVisibility(View.GONE);
+            view.findViewById(R.id.container_led_ppk).setVisibility(View.GONE);
+        } else {
+            TextView txtAdvMonitoringTitle = view.findViewById(R.id.txt_adv_monitoring_title);
+            LinearLayout containerAdvMonitoring = view.findViewById(R.id.container_adv_monitoring);
+            setupSingleMenu(txtAdvMonitoringTitle, containerAdvMonitoring, R.string.install_adv_monitoring_title);
+        }
 
-        // Initialize the chart
+        // 3. ASSIGN TEXT LISTENERS
+        txtDcpr.setOnClickListener(v -> {
+            if (isConnectedToAdb && android.os.Build.VERSION.SDK_INT >= 34) {
+                IIABAdbManager adbManager = IIABAdbManager.getInstance(requireContext());
+                adbManager.executeCommand("settings put global settings_enable_monitor_phantom_procs 0");
+                com.google.android.material.snackbar.Snackbar.make(v, R.string.adb_snack_disabling_cp, com.google.android.material.snackbar.Snackbar.LENGTH_SHORT).show();
+                new Handler(Looper.getMainLooper()).postDelayed(() -> adbManager.checkSystemRestrictions(requireContext()), 1000);
+            }
+        });
+
+        // Listener to set PPK to 256 (Android 12+)
+        txtPpk.setOnClickListener(v -> {
+            if (isConnectedToAdb && android.os.Build.VERSION.SDK_INT >= 31) {
+                IIABAdbManager adbManager = IIABAdbManager.getInstance(requireContext());
+                adbManager.executeCommand("device_config put activity_manager max_phantom_processes 256");
+                com.google.android.material.snackbar.Snackbar.make(v, R.string.adb_snack_setting_ppk, com.google.android.material.snackbar.Snackbar.LENGTH_SHORT).show();
+                new Handler(Looper.getMainLooper()).postDelayed(() -> adbManager.checkSystemRestrictions(requireContext()), 1000);
+            }
+        });
+
+        // 4. INITIALIZE CHART AND ADB BUTTON
         setupCpuChart();
 
-        // Configure the button
         btnAdbAction.setOnClickListener(v -> {
             if (isConnectedToAdb) {
                 new Thread(() -> {
-                    try { IIABAdbManager.getInstance(requireContext()).disconnect(); } catch (Exception ignored) {}
+                    try {
+                        IIABAdbManager.getInstance(requireContext()).disconnect();
+                    } catch (Exception ignored) {
+                    }
                 }).start();
                 isConnectedToAdb = false;
                 updateUiState(false);
@@ -202,6 +297,7 @@ public class DeployFragment extends Fragment {
         IntentFilter filter = new IntentFilter();
         filter.addAction("org.iiab.controller.ADB_PAIRING_SENT");
         filter.addAction("org.iiab.controller.ADB_CPU_UPDATE");
+        filter.addAction("org.iiab.controller.ADB_RESTRICTIONS_UPDATE");
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             requireContext().registerReceiver(adbUiUpdateReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
         } else {
@@ -244,14 +340,12 @@ public class DeployFragment extends Fragment {
         super.onPause();
         try {
             requireContext().unregisterReceiver(adbUiUpdateReceiver);
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
     }
+
     private void setupAllCollapsibleMenus() {
         if (getView() == null) return;
-
-        // 1. Monitoring
-//        setupSingleMenu(txtAdvMonitoringTitle, containerAdvMonitoring, R.string.install_adv_monitoring_title);
-
         // 2. Modules
         TextView txtModuleMgmtTitle = getView().findViewById(R.id.txt_module_mgmt_title);
         LinearLayout containerModuleMgmt = getView().findViewById(R.id.container_module_mgmt);
@@ -260,7 +354,6 @@ public class DeployFragment extends Fragment {
         // 3. Maintenance
         TextView txtMaintenanceTitle = getView().findViewById(R.id.txt_maintenance_title);
         LinearLayout containerMaintenance = getView().findViewById(R.id.container_maintenance);
-        //setupSingleMenu(txtMaintenanceTitle, containerMaintenance, R.string.install_header_maintenance);
     }
 
     private void setupSingleMenu(TextView titleView, View container, int stringRes) {
@@ -426,6 +519,7 @@ public class DeployFragment extends Fragment {
 
         pollForJsonFile(jsonFile, 10, 1000); // 10 attempts, 1000ms each = 10 seconds
     }
+
     private void requestFreshLocalVarsSilently() {
         File jsonFile = new File(sharedStateDir, "local_vars.json");
         if (jsonFile.exists() && jsonFile.length() > 0) {
@@ -728,6 +822,7 @@ public class DeployFragment extends Fragment {
             ((MainActivity) getActivity()).executeTermuxCommandHeadless("--install-module " + nextModule);
         }
     }
+
     /**
      * Master UI Controller for the Deployment Fragment.
      */
@@ -753,8 +848,10 @@ public class DeployFragment extends Fragment {
                 btnRefreshModules.setTextColor(Color.parseColor("#9E9E9E"));
                 btnRefreshModules.setAlpha(0.6f);
                 btnRefreshModules.setOnClickListener(v -> {
-                    if (!isTermuxInst || !isProotInstalled) Snackbar.make(v, R.string.install_msg_termux_missing, Snackbar.LENGTH_LONG).show();
-                    else if (isServerRunning) Snackbar.make(v, R.string.install_msg_server_running_lock, Snackbar.LENGTH_LONG).show();
+                    if (!isTermuxInst || !isProotInstalled)
+                        Snackbar.make(v, R.string.install_msg_termux_missing, Snackbar.LENGTH_LONG).show();
+                    else if (isServerRunning)
+                        Snackbar.make(v, R.string.install_msg_server_running_lock, Snackbar.LENGTH_LONG).show();
                 });
             } else {
                 btnRefreshModules.setTextColor(Color.parseColor("#2196F3"));
@@ -770,13 +867,13 @@ public class DeployFragment extends Fragment {
         // --- ADVANCED SECTION LOGIC (2x2 Grid) ---
         btnFastInstall.setEnabled(true);
         btnFastDelete.setEnabled(true);
-        if(btnAdvancedReset != null) btnAdvancedReset.setEnabled(true);
-        if(btnAdvancedBackup != null) btnAdvancedBackup.setEnabled(true);
-        if(btnAdvancedRestore != null) btnAdvancedRestore.setEnabled(true);
-        if(txtSelectBackupTitle != null) txtSelectBackupTitle.setEnabled(true);
+        if (btnAdvancedReset != null) btnAdvancedReset.setEnabled(true);
+        if (btnAdvancedBackup != null) btnAdvancedBackup.setEnabled(true);
+        if (btnAdvancedRestore != null) btnAdvancedRestore.setEnabled(true);
+        if (txtSelectBackupTitle != null) txtSelectBackupTitle.setEnabled(true);
 
         // Force Stop is always active as an emergency exit
-        if(btnAdvancedForceStop != null) {
+        if (btnAdvancedForceStop != null) {
             btnAdvancedForceStop.setEnabled(true);
             btnAdvancedForceStop.setAlpha(1.0f);
             btnAdvancedForceStop.setOnClickListener(v -> openTermuxAppInfo());
@@ -787,52 +884,53 @@ public class DeployFragment extends Fragment {
             float lockAlpha = 0.5f;
             btnFastInstall.setAlpha(lockAlpha);
             btnFastDelete.setAlpha(lockAlpha);
-            if(btnAdvancedBackup != null) btnAdvancedBackup.setAlpha(lockAlpha);
-            if(btnAdvancedRestore != null) btnAdvancedRestore.setAlpha(lockAlpha);
-            if(btnAdvancedReset != null) btnAdvancedReset.setAlpha(lockAlpha);
-            if(txtSelectBackupTitle != null) txtSelectBackupTitle.setAlpha(lockAlpha);
+            if (btnAdvancedBackup != null) btnAdvancedBackup.setAlpha(lockAlpha);
+            if (btnAdvancedRestore != null) btnAdvancedRestore.setAlpha(lockAlpha);
+            if (btnAdvancedReset != null) btnAdvancedReset.setAlpha(lockAlpha);
+            if (txtSelectBackupTitle != null) txtSelectBackupTitle.setAlpha(lockAlpha);
 
             btnFastInstall.setText(R.string.install_btn_install);
 
             View.OnClickListener noTermux = v -> Snackbar.make(v, R.string.install_msg_termux_missing, Snackbar.LENGTH_LONG).show();
             btnFastInstall.setOnClickListener(noTermux);
             btnFastDelete.setOnClickListener(noTermux);
-            if(btnAdvancedBackup != null) btnAdvancedBackup.setOnClickListener(noTermux);
-            if(btnAdvancedRestore != null) btnAdvancedRestore.setOnClickListener(noTermux);
-            if(btnAdvancedReset != null) btnAdvancedReset.setOnClickListener(noTermux);
-            if(txtSelectBackupTitle != null) txtSelectBackupTitle.setOnClickListener(noTermux);
+            if (btnAdvancedBackup != null) btnAdvancedBackup.setOnClickListener(noTermux);
+            if (btnAdvancedRestore != null) btnAdvancedRestore.setOnClickListener(noTermux);
+            if (btnAdvancedReset != null) btnAdvancedReset.setOnClickListener(noTermux);
+            if (txtSelectBackupTitle != null) txtSelectBackupTitle.setOnClickListener(noTermux);
 
         } else if (isServerRunning) {
             // CASE B: Server Running (Security lock)
             float lockAlpha = 0.5f;
             btnFastInstall.setAlpha(lockAlpha);
             btnFastDelete.setAlpha(lockAlpha);
-            if(btnAdvancedBackup != null) btnAdvancedBackup.setAlpha(lockAlpha);
-            if(btnAdvancedRestore != null) btnAdvancedRestore.setAlpha(lockAlpha);
-            if(btnAdvancedReset != null) btnAdvancedReset.setAlpha(lockAlpha);
-            if(txtSelectBackupTitle != null) txtSelectBackupTitle.setAlpha(lockAlpha);
+            if (btnAdvancedBackup != null) btnAdvancedBackup.setAlpha(lockAlpha);
+            if (btnAdvancedRestore != null) btnAdvancedRestore.setAlpha(lockAlpha);
+            if (btnAdvancedReset != null) btnAdvancedReset.setAlpha(lockAlpha);
+            if (txtSelectBackupTitle != null) txtSelectBackupTitle.setAlpha(lockAlpha);
 
             btnFastInstall.setText(R.string.install_btn_reinstall);
 
             View.OnClickListener serverHot = v -> Snackbar.make(v, R.string.install_msg_server_running_lock, Snackbar.LENGTH_LONG).show();
             btnFastInstall.setOnClickListener(serverHot);
             btnFastDelete.setOnClickListener(serverHot);
-            if(btnAdvancedBackup != null) btnAdvancedBackup.setOnClickListener(serverHot);
-            if(btnAdvancedRestore != null) btnAdvancedRestore.setOnClickListener(serverHot);
-            if(btnAdvancedReset != null) btnAdvancedReset.setOnClickListener(serverHot);
-            if(txtSelectBackupTitle != null) txtSelectBackupTitle.setOnClickListener(serverHot);
+            if (btnAdvancedBackup != null) btnAdvancedBackup.setOnClickListener(serverHot);
+            if (btnAdvancedRestore != null) btnAdvancedRestore.setOnClickListener(serverHot);
+            if (btnAdvancedReset != null) btnAdvancedReset.setOnClickListener(serverHot);
+            if (txtSelectBackupTitle != null)
+                txtSelectBackupTitle.setOnClickListener(serverHot);
 
         } else {
             // CASE C: Clear Path (Server Offline)
             btnFastInstall.setAlpha(1.0f);
             btnFastDelete.setAlpha(1.0f);
-            if(btnAdvancedBackup != null) btnAdvancedBackup.setAlpha(1.0f);
-            if(btnAdvancedReset != null) btnAdvancedReset.setAlpha(1.0f);
-            if(txtSelectBackupTitle != null) txtSelectBackupTitle.setAlpha(1.0f);
+            if (btnAdvancedBackup != null) btnAdvancedBackup.setAlpha(1.0f);
+            if (btnAdvancedReset != null) btnAdvancedReset.setAlpha(1.0f);
+            if (txtSelectBackupTitle != null) txtSelectBackupTitle.setAlpha(1.0f);
             refreshRestoreButtonLogic();
 
             // Restore button starts locked until a valid backup is selected
-            if(btnAdvancedRestore != null) {
+            if (btnAdvancedRestore != null) {
                 btnAdvancedRestore.setAlpha(0.5f);
                 btnAdvancedRestore.setOnClickListener(v -> {
                     Snackbar.make(v, "Please select a backup first.", Snackbar.LENGTH_LONG).show();
@@ -858,14 +956,14 @@ public class DeployFragment extends Fragment {
                 mainAct.executeTermuxCommandHeadless("--remove-rootfs");
             });
 
-            if(btnAdvancedBackup != null) {
+            if (btnAdvancedBackup != null) {
                 btnAdvancedBackup.setOnClickListener(v -> {
                     Snackbar.make(v, "Starting backup (backup-rootfs)...", Snackbar.LENGTH_SHORT).show();
                     mainAct.executeTermuxCommandHeadless("--backup-rootfs");
                 });
             }
 
-            if(btnAdvancedReset != null) {
+            if (btnAdvancedReset != null) {
                 btnAdvancedReset.setOnClickListener(v -> {
                     new android.app.AlertDialog.Builder(requireContext())
                             .setTitle(R.string.install_dialog_reset_title)
@@ -881,7 +979,7 @@ public class DeployFragment extends Fragment {
             }
 
             // --- BACKUP DROP-DOWN MENU LOGIC  ---
-            if(txtSelectBackupTitle != null) {
+            if (txtSelectBackupTitle != null) {
                 txtSelectBackupTitle.setOnClickListener(v -> {
                     boolean isCollapsed = containerBackupList.getVisibility() == View.GONE;
 
@@ -897,7 +995,8 @@ public class DeployFragment extends Fragment {
 
                         // Start hunting for the JSON file (wait up to 5 seconds)
                         File backupsJsonFile = new File(stateDir, "backups_list.json");
-                        if(backupsJsonFile.exists()) backupsJsonFile.delete(); // Clean up old queries
+                        if (backupsJsonFile.exists())
+                            backupsJsonFile.delete(); // Clean up old queries
                         pollForBackupsJson(backupsJsonFile, 5, 1000);
 
                     } else {
@@ -926,7 +1025,7 @@ public class DeployFragment extends Fragment {
     private void pollForBackupsJson(File jsonFile, int attemptsLeft, int delayMs) {
         if (attemptsLeft <= 0) {
             // Time ran out and Termux did not respond
-            if(getActivity() != null) {
+            if (getActivity() != null) {
                 getActivity().runOnUiThread(() -> {
                     if (txtBackupStatus != null) {
                         txtBackupStatus.setText(getString(R.string.install_msg_no_backups));
@@ -1050,6 +1149,7 @@ public class DeployFragment extends Fragment {
             });
         }
     }
+
     private void refreshDashboardLeds(MainActivity mainAct) {
         if (mainAct == null || ledTermux == null) return;
 
@@ -1085,12 +1185,28 @@ public class DeployFragment extends Fragment {
             txtAdbLedLabel.setTextColor(Color.parseColor("#4CAF50"));
             btnAdbAction.setText(getString(R.string.adb_btn_disconnect));
             btnAdbAction.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#F44336")));
+
+            // Texto en cursiva mientras consulta
+            txtDcpr.setText(android.text.Html.fromHtml("Child Process<br><i>(Checking...)</i>", android.text.Html.FROM_HTML_MODE_COMPACT));
+            txtPpk.setText(android.text.Html.fromHtml("PPK Limit<br><i>(Checking...)</i>", android.text.Html.FROM_HTML_MODE_COMPACT));
+            ledDcpr.setBackgroundResource(R.drawable.led_off);
+            ledDcpr.setBackgroundTintList(null);
+            ledPpk.setBackgroundResource(R.drawable.led_off);
+            ledPpk.setBackgroundTintList(null);
+
         } else {
             ledAdbStatus.setBackgroundResource(R.drawable.led_off);
             txtAdbLedLabel.setText(getString(R.string.adb_status_offline));
             txtAdbLedLabel.setTextColor(ContextCompat.getColor(requireContext(), R.color.dash_text_secondary));
             btnAdbAction.setText(getString(R.string.adb_btn_connect));
             btnAdbAction.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#2196F3")));
+
+            txtDcpr.setText("Child Process\n(--)");
+            txtPpk.setText("PPK Limit\n(--)");
+            ledDcpr.setBackgroundResource(R.drawable.led_off);
+            ledDcpr.setBackgroundTintList(null);
+            ledPpk.setBackgroundResource(R.drawable.led_off);
+            ledPpk.setBackgroundTintList(null);
         }
     }
 
@@ -1142,6 +1258,7 @@ public class DeployFragment extends Fragment {
                 });
 
                 adbManager.startCpuMonitor(appContext);
+                adbManager.checkSystemRestrictions(appContext);
             } catch (Exception e) {
                 isAttemptingFastConnect = false;
             }
@@ -1160,12 +1277,30 @@ public class DeployFragment extends Fragment {
 
     private android.net.nsd.NsdManager.DiscoveryListener createDiscoveryListener(String serviceType) {
         return new android.net.nsd.NsdManager.DiscoveryListener() {
-            @Override public void onDiscoveryStarted(String regType) { }
-            @Override public void onServiceLost(android.net.nsd.NsdServiceInfo service) { }
-            @Override public void onDiscoveryStopped(String serviceType) { }
-            @Override public void onStartDiscoveryFailed(String serviceType, int errorCode) { nsdManager.stopServiceDiscovery(this); }
-            @Override public void onStopDiscoveryFailed(String serviceType, int errorCode) { nsdManager.stopServiceDiscovery(this); }
-            @Override public void onServiceFound(android.net.nsd.NsdServiceInfo service) {
+            @Override
+            public void onDiscoveryStarted(String regType) {
+            }
+
+            @Override
+            public void onServiceLost(android.net.nsd.NsdServiceInfo service) {
+            }
+
+            @Override
+            public void onDiscoveryStopped(String serviceType) {
+            }
+
+            @Override
+            public void onStartDiscoveryFailed(String serviceType, int errorCode) {
+                nsdManager.stopServiceDiscovery(this);
+            }
+
+            @Override
+            public void onStopDiscoveryFailed(String serviceType, int errorCode) {
+                nsdManager.stopServiceDiscovery(this);
+            }
+
+            @Override
+            public void onServiceFound(android.net.nsd.NsdServiceInfo service) {
                 if (service.getServiceType().contains("_adb-tls")) resolveService(service);
             }
         };
@@ -1173,8 +1308,12 @@ public class DeployFragment extends Fragment {
 
     private void resolveService(android.net.nsd.NsdServiceInfo serviceInfo) {
         nsdManager.resolveService(serviceInfo, new android.net.nsd.NsdManager.ResolveListener() {
-            @Override public void onResolveFailed(android.net.nsd.NsdServiceInfo serviceInfo, int errorCode) { }
-            @Override public void onServiceResolved(android.net.nsd.NsdServiceInfo serviceInfo) {
+            @Override
+            public void onResolveFailed(android.net.nsd.NsdServiceInfo serviceInfo, int errorCode) {
+            }
+
+            @Override
+            public void onServiceResolved(android.net.nsd.NsdServiceInfo serviceInfo) {
                 int port = serviceInfo.getPort();
                 String type = serviceInfo.getServiceType();
 
@@ -1226,9 +1365,16 @@ public class DeployFragment extends Fragment {
 
     private void stopDiscovery() {
         try {
-            if (connectDiscoveryListener != null) { nsdManager.stopServiceDiscovery(connectDiscoveryListener); connectDiscoveryListener = null; }
-            if (pairingDiscoveryListener != null) { nsdManager.stopServiceDiscovery(pairingDiscoveryListener); pairingDiscoveryListener = null; }
-        } catch (Exception ignored) {}
+            if (connectDiscoveryListener != null) {
+                nsdManager.stopServiceDiscovery(connectDiscoveryListener);
+                connectDiscoveryListener = null;
+            }
+            if (pairingDiscoveryListener != null) {
+                nsdManager.stopServiceDiscovery(pairingDiscoveryListener);
+                pairingDiscoveryListener = null;
+            }
+        } catch (Exception ignored) {
+        }
     }
 
     private void checkIfScanTimedOut() {
@@ -1307,7 +1453,8 @@ public class DeployFragment extends Fragment {
                 float idleCpu = Float.parseFloat(m.group(2));
                 if (totalCpu > 0) return ((totalCpu - idleCpu) / totalCpu) * 100f;
             }
-        } catch (Exception ignored) {}
-        return 0f;
+        } catch (Exception ignored) {
+        }
+        return -1f;
     }
 }

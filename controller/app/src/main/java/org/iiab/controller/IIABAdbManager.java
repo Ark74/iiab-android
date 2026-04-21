@@ -119,4 +119,82 @@ public class IIABAdbManager extends AbsAdbConnectionManager {
             }
         }).start();
     }
+
+    public void checkSystemRestrictions(Context context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            return;
+        }
+
+        new Thread(() -> {
+            try {
+                android.content.Intent intent = new android.content.Intent("org.iiab.controller.ADB_RESTRICTIONS_UPDATE");
+                intent.setPackage(context.getPackageName());
+
+                // 1. Get Child Process (SHIELDED AGAINST ABRUPT CLOSURES)
+                try (io.github.muntashirakon.adb.AdbStream cpStream = this.openStream("shell:settings get global settings_enable_monitor_phantom_procs")) {
+                    java.io.BufferedReader cpReader = new java.io.BufferedReader(new java.io.InputStreamReader(cpStream.openInputStream()));
+                    StringBuilder cpSb = new StringBuilder();
+                    String line;
+                    try {
+                        while ((line = cpReader.readLine()) != null) cpSb.append(line.trim());
+                    } catch (java.io.IOException ignored) {
+                        // Shell closed stream abruptly. Ignore error and keep what was read.
+                    }
+                    String cpResult = cpSb.toString();
+                    Log.d(TAG, "ADB Check Child Process: " + cpResult);
+                    intent.putExtra("child_process_value", cpResult.isEmpty() ? "null" : cpResult);
+                } catch (Exception e) {
+                    Log.e(TAG, "Error opening Child Process stream", e);
+                    intent.putExtra("child_process_value", "error");
+                }
+
+                // 2. Get PPK Limit
+                try (io.github.muntashirakon.adb.AdbStream ppkStream = this.openStream("shell:dumpsys activity settings")) {
+                    java.io.BufferedReader ppkReader = new java.io.BufferedReader(new java.io.InputStreamReader(ppkStream.openInputStream()));
+                    String line;
+                    String ppkValue = "unknown";
+                    try {
+                        while ((line = ppkReader.readLine()) != null) {
+                            if (line.contains("max_phantom_processes=")) {
+                                ppkValue = line.split("=")[1].trim();
+                                Log.d(TAG, "ADB Check PPK Limit: " + ppkValue);
+                                break;
+                            }
+                        }
+                    } catch (java.io.IOException ignored) {
+                        // The shell abruptly shut down the stream.
+                    }
+                    intent.putExtra("ppk_value", ppkValue);
+                } catch (Exception e) {
+                    Log.e(TAG, "Error opening PPK stream", e);
+                    intent.putExtra("ppk_value", "error");
+                }
+
+                Thread.sleep(200);
+                context.sendBroadcast(intent);
+            } catch (Exception e) {
+                Log.e(TAG, "Error building system restrictions intent", e);
+            }
+        }).start();
+    }
+
+    // Execute shell commands seamlessly
+    public void executeCommand(String command) {
+        new Thread(() -> {
+            try (io.github.muntashirakon.adb.AdbStream stream = this.openStream("shell:" + command)) {
+                java.io.InputStream is = stream.openInputStream();
+                byte[] buf = new byte[1024];
+                try {
+                    while (is.read(buf) != -1) {
+                        // Drain the stream so the command finishes executing
+                    }
+                } catch (java.io.IOException ignored) {
+                    // Command finished successfully and closed the tunnel
+                }
+                Log.d(TAG, "Command executed cleanly: " + command);
+            } catch (Exception e) {
+                Log.e(TAG, "Error executing command: " + command, e);
+            }
+        }).start();
+    }
 }
