@@ -297,4 +297,23 @@
     <string name="install_msg_restore_starting">Starting restore of %1$s…</string>
     <string name="install_msg_select_backup_first">Please select a backup first.</string>
 
+    <string name="adb_notif_title">IIAB Wireless Debugging</string>
+    <string name="adb_notif_desc">ADB ports found! Tap \'Enter PIN\' below.</string>
+    <string name="adb_notif_action_pin">Enter PIN</string>
+    <string name="adb_notif_input_hint">Enter 6-digit PIN</string>
+
+    <string name="adb_toast_pairing">Pairing securely (Native)...</string>
+    <string name="adb_toast_pin_invalid">Invalid PIN. Must be 6 digits.</string>
+    <string name="adb_toast_pairing_failed">Pairing failed. Please try again.</string>
+    <string name="adb_toast_scan_timeout">ADB scan timed out. Try again.</string>
+
+    <string name="adb_status_connected">Connected!</string>
+    <string name="adb_status_offline">Offline</string>
+    <string name="adb_btn_connect">Connect to ADB</string>
+    <string name="adb_btn_disconnect">Disconnect ADB</string>
+    <string name="adb_btn_scanning">Scanning network...</string>
+
+    <string name="adb_desc_monitoring">Required to monitor CPU usage, manage Child Processes, and fix Phantom Process Killer (PPK).</string>
+    <string name="adb_graph_title">CPU History (60 seconds)</string>
+    <string name="adb_snack_dev_options">Open Developer Options manually</string>
 </resources>

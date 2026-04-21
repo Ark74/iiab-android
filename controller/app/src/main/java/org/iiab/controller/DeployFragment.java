@@ -23,6 +23,21 @@ import android.widget.CheckBox;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import android.content.BroadcastReceiver;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.RemoteInput;
+import com.github.mikephil.charting.components.XAxis;
+import com.github.mikephil.charting.components.YAxis;
+import com.github.mikephil.charting.data.Entry;
+import com.github.mikephil.charting.data.LineData;
+import com.github.mikephil.charting.data.LineDataSet;
+import com.github.mikephil.charting.interfaces.datasets.ILineDataSet;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
@@ -72,6 +87,41 @@ public class DeployFragment extends Fragment {
     private static final String TAG = "IIAB-DeployFragment";
     private List<String> installationQueue = new ArrayList<>();
     private boolean isBatchInstalling = false;
+    // -- Advance monitoring --
+    private Button btnAdbAction;
+    private View ledAdbStatus;
+    private TextView txtAdbLedLabel;
+    private com.github.mikephil.charting.charts.LineChart cpuChart;
+
+    private boolean isConnectedToAdb = false;
+    private boolean isScanning = false;
+    private boolean isAttemptingFastConnect = false;
+    private android.net.nsd.NsdManager nsdManager;
+    private int discoveredConnectPort = -1;
+    private int discoveredPairingPort = -1;
+    private android.net.nsd.NsdManager.DiscoveryListener connectDiscoveryListener;
+    private android.net.nsd.NsdManager.DiscoveryListener pairingDiscoveryListener;
+
+    private static final String CHANNEL_ID = "adb_pairing_channel";
+    private static final String SERVICE_TYPE_CONNECT = "_adb-tls-connect._tcp.";
+    private static final String SERVICE_TYPE_PAIRING = "_adb-tls-pairing._tcp.";
+
+    private final BroadcastReceiver adbUiUpdateReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if ("org.iiab.controller.ADB_PAIRING_SENT".equals(action)) {
+                btnAdbAction.setText("Connected!");
+                isConnectedToAdb = true;
+                new Handler(Looper.getMainLooper()).postDelayed(() -> { if (isAdded()) updateUiState(true); }, 500);
+            } else if ("org.iiab.controller.ADB_CPU_UPDATE".equals(action)) {
+                String cpuData = intent.getStringExtra("cpu_line");
+                if (isAdded() && isConnectedToAdb && cpuData != null) {
+                    addCpuEntry(parseCpuUsage(cpuData));
+                }
+            }
+        }
+    };
 
     @Nullable
     @Override
@@ -89,17 +139,32 @@ public class DeployFragment extends Fragment {
         ledDcpr = view.findViewById(R.id.led_install_dcpr);
         ledPpk = view.findViewById(R.id.led_install_ppk);
 
-        // Connect to Advance Monitoring
-        TextView txtAdvMonitoringTitle = view.findViewById(R.id.txt_adv_monitoring_title);
-        if (txtAdvMonitoringTitle != null) {
-            // Set clean text without arrows since it's no longer collapsible
-            txtAdvMonitoringTitle.setText(R.string.install_adv_monitoring_title);
+        btnAdbAction = view.findViewById(R.id.btn_adb_action);
+        ledAdbStatus = view.findViewById(R.id.led_adb_status);
+        txtAdbLedLabel = view.findViewById(R.id.txt_adb_led_label);
+        cpuChart = view.findViewById(R.id.cpu_chart);
+        nsdManager = (android.net.nsd.NsdManager) requireContext().getSystemService(Context.NSD_SERVICE);
 
-            // Show a WIP message on click instead of opening the removed class
-            txtAdvMonitoringTitle.setOnClickListener(v -> {
-                Snackbar.make(v, R.string.deploy_wip_desc, Snackbar.LENGTH_SHORT).show();
-            });
-        }
+        // Activate the collapsible menu
+        TextView txtAdvMonitoringTitle = view.findViewById(R.id.txt_adv_monitoring_title);
+        LinearLayout containerAdvMonitoring = view.findViewById(R.id.container_adv_monitoring);
+        setupSingleMenu(txtAdvMonitoringTitle, containerAdvMonitoring, R.string.install_adv_monitoring_title);
+
+        // Initialize the chart
+        setupCpuChart();
+
+        // Configure the button
+        btnAdbAction.setOnClickListener(v -> {
+            if (isConnectedToAdb) {
+                new Thread(() -> {
+                    try { IIABAdbManager.getInstance(requireContext()).disconnect(); } catch (Exception ignored) {}
+                }).start();
+                isConnectedToAdb = false;
+                updateUiState(false);
+            } else if (!isScanning) {
+                startAdbPairingFlow();
+            }
+        });
 
         rolesContainer = view.findViewById(R.id.install_roles_container);
         discrepancyWarning = view.findViewById(R.id.install_discrepancy_warning);
@@ -134,6 +199,15 @@ public class DeployFragment extends Fragment {
         // Hide warning initially
         if (discrepancyWarning != null) discrepancyWarning.setVisibility(View.GONE);
 
+        IntentFilter filter = new IntentFilter();
+        filter.addAction("org.iiab.controller.ADB_PAIRING_SENT");
+        filter.addAction("org.iiab.controller.ADB_CPU_UPDATE");
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            requireContext().registerReceiver(adbUiUpdateReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            requireContext().registerReceiver(adbUiUpdateReceiver, filter);
+        }
+
         // Restore the memory queue
         restoreQueueFromPrefs();
 
@@ -165,6 +239,13 @@ public class DeployFragment extends Fragment {
         updateDynamicButtons();
     }
 
+    @Override
+    public void onPause() {
+        super.onPause();
+        try {
+            requireContext().unregisterReceiver(adbUiUpdateReceiver);
+        } catch (Exception ignored) {}
+    }
     private void setupAllCollapsibleMenus() {
         if (getView() == null) return;
 
@@ -991,5 +1072,242 @@ public class DeployFragment extends Fragment {
         // Left OFF for now, waiting for future ADB service.
         ledDcpr.setBackgroundResource(R.drawable.led_off);
         ledPpk.setBackgroundResource(R.drawable.led_off);
+    }
+
+    // =========================================================================
+    // ADB & CPU MONITORING METHODS
+    // =========================================================================
+
+    private void updateUiState(boolean isConnected) {
+        if (isConnected) {
+            ledAdbStatus.setBackgroundResource(R.drawable.led_on_green);
+            txtAdbLedLabel.setText(getString(R.string.adb_status_connected));
+            txtAdbLedLabel.setTextColor(Color.parseColor("#4CAF50"));
+            btnAdbAction.setText(getString(R.string.adb_btn_disconnect));
+            btnAdbAction.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#F44336")));
+        } else {
+            ledAdbStatus.setBackgroundResource(R.drawable.led_off);
+            txtAdbLedLabel.setText(getString(R.string.adb_status_offline));
+            txtAdbLedLabel.setTextColor(ContextCompat.getColor(requireContext(), R.color.dash_text_secondary));
+            btnAdbAction.setText(getString(R.string.adb_btn_connect));
+            btnAdbAction.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#2196F3")));
+        }
+    }
+
+    private void startAdbPairingFlow() {
+        isScanning = true;
+        isAttemptingFastConnect = false;
+        btnAdbAction.setText(getString(R.string.adb_btn_scanning));
+        btnAdbAction.setEnabled(false);
+
+        discoveredConnectPort = -1;
+        discoveredPairingPort = -1;
+
+        connectDiscoveryListener = createDiscoveryListener(SERVICE_TYPE_CONNECT);
+        pairingDiscoveryListener = createDiscoveryListener(SERVICE_TYPE_PAIRING);
+
+        try {
+            nsdManager.discoverServices(SERVICE_TYPE_CONNECT, android.net.nsd.NsdManager.PROTOCOL_DNS_SD, connectDiscoveryListener);
+            nsdManager.discoverServices(SERVICE_TYPE_PAIRING, android.net.nsd.NsdManager.PROTOCOL_DNS_SD, pairingDiscoveryListener);
+        } catch (Exception e) {
+            android.util.Log.e(TAG, "Error starting NsdManager", e);
+            resetScanState();
+            return;
+        }
+
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            if (isScanning && !isConnectedToAdb) {
+                openDeveloperOptions();
+            }
+        }, 1500);
+
+        new Handler(Looper.getMainLooper()).postDelayed(this::checkIfScanTimedOut, 90000);
+    }
+
+    private void attemptFastConnection(int port) {
+        if (isAttemptingFastConnect) return;
+        isAttemptingFastConnect = true;
+
+        Context appContext = requireContext().getApplicationContext();
+        new Thread(() -> {
+            try {
+                IIABAdbManager adbManager = IIABAdbManager.getInstance(appContext);
+                adbManager.connect("127.0.0.1", port);
+
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    stopDiscovery();
+                    isConnectedToAdb = true;
+                    btnAdbAction.setText(getString(R.string.adb_status_connected));
+                    updateUiState(true);
+                });
+
+                adbManager.startCpuMonitor(appContext);
+            } catch (Exception e) {
+                isAttemptingFastConnect = false;
+            }
+        }).start();
+    }
+
+    private void openDeveloperOptions() {
+        try {
+            Intent intent = new Intent(android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS);
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+        } catch (Exception e) {
+            Snackbar.make(getView(), R.string.adb_snack_dev_options, Snackbar.LENGTH_LONG).show();
+        }
+    }
+
+    private android.net.nsd.NsdManager.DiscoveryListener createDiscoveryListener(String serviceType) {
+        return new android.net.nsd.NsdManager.DiscoveryListener() {
+            @Override public void onDiscoveryStarted(String regType) { }
+            @Override public void onServiceLost(android.net.nsd.NsdServiceInfo service) { }
+            @Override public void onDiscoveryStopped(String serviceType) { }
+            @Override public void onStartDiscoveryFailed(String serviceType, int errorCode) { nsdManager.stopServiceDiscovery(this); }
+            @Override public void onStopDiscoveryFailed(String serviceType, int errorCode) { nsdManager.stopServiceDiscovery(this); }
+            @Override public void onServiceFound(android.net.nsd.NsdServiceInfo service) {
+                if (service.getServiceType().contains("_adb-tls")) resolveService(service);
+            }
+        };
+    }
+
+    private void resolveService(android.net.nsd.NsdServiceInfo serviceInfo) {
+        nsdManager.resolveService(serviceInfo, new android.net.nsd.NsdManager.ResolveListener() {
+            @Override public void onResolveFailed(android.net.nsd.NsdServiceInfo serviceInfo, int errorCode) { }
+            @Override public void onServiceResolved(android.net.nsd.NsdServiceInfo serviceInfo) {
+                int port = serviceInfo.getPort();
+                String type = serviceInfo.getServiceType();
+
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    if (type.contains("connect")) {
+                        discoveredConnectPort = port;
+                        attemptFastConnection(port);
+                    } else if (type.contains("pairing")) {
+                        discoveredPairingPort = port;
+                    }
+
+                    if (discoveredConnectPort != -1 && discoveredPairingPort != -1 && !isConnectedToAdb) {
+                        stopDiscovery();
+                        showPairingNotification(discoveredConnectPort, discoveredPairingPort);
+                        resetScanState();
+                    }
+                });
+            }
+        });
+    }
+
+    private void showPairingNotification(int connectPort, int pairingPort) {
+        RemoteInput remoteInput = new RemoteInput.Builder(AdbPairingReceiver.KEY_PIN_REPLY).setLabel(getString(R.string.adb_notif_input_hint)).build();
+        Intent replyIntent = new Intent(requireContext(), AdbPairingReceiver.class);
+        replyIntent.putExtra("connectPort", connectPort);
+        replyIntent.putExtra("pairingPort", pairingPort);
+
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT | (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S ? PendingIntent.FLAG_MUTABLE : 0);
+        PendingIntent replyPendingIntent = PendingIntent.getBroadcast(requireContext(), 0, replyIntent, flags);
+
+        NotificationCompat.Action action = new NotificationCompat.Action.Builder(android.R.drawable.ic_menu_edit, getString(R.string.adb_notif_action_pin), replyPendingIntent).addRemoteInput(remoteInput).build();
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "ADB Pairing", NotificationManager.IMPORTANCE_HIGH);
+            requireContext().getSystemService(NotificationManager.class).createNotificationChannel(channel);
+        }
+
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(requireContext(), CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle(getString(R.string.adb_notif_title))
+                .setContentText(getString(R.string.adb_notif_desc))
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .addAction(action)
+                .setAutoCancel(true);
+
+        NotificationManager nm = (NotificationManager) requireContext().getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm != null) nm.notify(AdbPairingReceiver.NOTIFICATION_ID, builder.build());
+    }
+
+    private void stopDiscovery() {
+        try {
+            if (connectDiscoveryListener != null) { nsdManager.stopServiceDiscovery(connectDiscoveryListener); connectDiscoveryListener = null; }
+            if (pairingDiscoveryListener != null) { nsdManager.stopServiceDiscovery(pairingDiscoveryListener); pairingDiscoveryListener = null; }
+        } catch (Exception ignored) {}
+    }
+
+    private void checkIfScanTimedOut() {
+        if (isScanning && (discoveredConnectPort == -1 || discoveredPairingPort == -1)) {
+            Snackbar.make(getView(), R.string.adb_toast_scan_timeout, Snackbar.LENGTH_LONG).show();
+            stopDiscovery();
+            resetScanState();
+        }
+    }
+
+    private void resetScanState() {
+        isScanning = false;
+        if (!isConnectedToAdb) {
+            btnAdbAction.setEnabled(true);
+            btnAdbAction.setText(getString(R.string.adb_btn_connect));
+        }
+    }
+
+    private void setupCpuChart() {
+        cpuChart.getDescription().setEnabled(false);
+        cpuChart.setTouchEnabled(false);
+        cpuChart.setDrawGridBackground(false);
+        cpuChart.getLegend().setEnabled(false);
+
+        XAxis xAxis = cpuChart.getXAxis();
+        xAxis.setDrawLabels(false);
+        xAxis.setDrawGridLines(true);
+        xAxis.setGridColor(Color.parseColor("#333333"));
+        xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
+
+        YAxis leftAxis = cpuChart.getAxisLeft();
+        leftAxis.setTextColor(Color.LTGRAY);
+        leftAxis.setAxisMaximum(100f);
+        leftAxis.setAxisMinimum(0f);
+        leftAxis.setDrawGridLines(true);
+        leftAxis.setGridColor(Color.parseColor("#333333"));
+
+        cpuChart.getAxisRight().setEnabled(false);
+        cpuChart.setData(new LineData());
+    }
+
+    private void addCpuEntry(float cpuPercentage) {
+        if (cpuChart == null || cpuChart.getData() == null) return;
+
+        LineData data = cpuChart.getData();
+        ILineDataSet set = data.getDataSetByIndex(0);
+
+        if (set == null) {
+            LineDataSet newSet = new LineDataSet(null, "CPU");
+            newSet.setAxisDependency(YAxis.AxisDependency.LEFT);
+            newSet.setColor(Color.parseColor("#4CAF50"));
+            newSet.setLineWidth(2f);
+            newSet.setDrawCircles(false);
+            newSet.setDrawValues(false);
+            newSet.setMode(LineDataSet.Mode.CUBIC_BEZIER);
+            newSet.setDrawFilled(true);
+            newSet.setFillColor(Color.parseColor("#4CAF50"));
+            newSet.setFillAlpha(50);
+            set = newSet;
+            data.addDataSet(set);
+        }
+
+        data.addEntry(new Entry(set.getEntryCount(), cpuPercentage), 0);
+        data.notifyDataChanged();
+        cpuChart.notifyDataSetChanged();
+        cpuChart.setVisibleXRangeMaximum(60);
+        cpuChart.moveViewToX(data.getEntryCount());
+    }
+
+    private float parseCpuUsage(String cpuLine) {
+        try {
+            java.util.regex.Pattern p = java.util.regex.Pattern.compile("(\\d+)%cpu.*?(\\d+)%idle");
+            java.util.regex.Matcher m = p.matcher(cpuLine.toLowerCase());
+            if (m.find()) {
+                float totalCpu = Float.parseFloat(m.group(1));
+                float idleCpu = Float.parseFloat(m.group(2));
+                if (totalCpu > 0) return ((totalCpu - idleCpu) / totalCpu) * 100f;
+            }
+        } catch (Exception ignored) {}
+        return 0f;
     }
 }
